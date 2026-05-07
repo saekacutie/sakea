@@ -873,23 +873,79 @@ def ssh_providers():
     print(f"  {DIM}Pair with a working bughost + payload.{RES}")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
-# ── ONLINE SMS PH ──────────────────────────
-SMS_API = "https://smsph.net/api"
+# ── TEMP SMS / ONLINE SMS PH (MULTI-SOURCE) ──
+SMS_SERVICES = {
+    "quackr": {
+        "name": "Quackr.io",
+        "api_base": "https://api.quackr.io/v1/numbers",
+        "requires_key": False,
+        "status": "checking",
+        "description": "Free temporary numbers",
+    },
+    "receivesms": {
+        "name": "Receive-SMS.cc",
+        "api_base": "https://receive-sms.cc/api/v1",
+        "requires_key": False,
+        "status": "checking",
+        "description": "Free + paid options",
+    },
+    "smsactivate": {
+        "name": "SMS Activate",
+        "api_base": "https://api.sms-activate.org/stubs/handler_api.php",
+        "requires_key": True,
+        "status": "checking",
+        "description": "Paid, PH numbers",
+    },
+    "5sim": {
+        "name": "5sim.net",
+        "api_base": "https://api.5sim.net/v1",
+        "requires_key": True,
+        "status": "checking",
+        "description": "Paid, many countries",
+    },
+    "tempnum": {
+        "name": "Temp-Number.com",
+        "api_base": "https://temp-number.com/api/v1",
+        "requires_key": False,
+        "status": "checking",
+        "description": "Free, fast",
+    },
+}
+
+current_sms_number = None
+current_sms_service = None
+sms_session = {}
+
+def update_sms_service_statuses():
+    for key in SMS_SERVICES:
+        if SMS_SERVICES[key]["requires_key"]:
+            # Skip services that need a key unless we have one stored
+            SMS_SERVICES[key]["status"] = "key_required"
+            continue
+        try:
+            # Simple connectivity check
+            r = requests.get(SMS_SERVICES[key]["api_base"], timeout=5)
+            SMS_SERVICES[key]["status"] = "available" if r.status_code in (200, 400, 401, 403) else "down"
+        except:
+            SMS_SERVICES[key]["status"] = "down"
 
 def sms_ph_main():
-    """Main entry point for Online SMS Philippines"""
+    update_sms_service_statuses()
     options = [
-        "Get Available Numbers",
-        "View Messages for a Number",
-        "Copy Active Number",
+        "Get a Temporary Number",
+        "View Messages",
+        "Copy Number",
+        "Change Service",
         "Back to Main Menu",
     ]
     selected = 0
     while True:
         os.system('clear')
         banner()
-        print(f"  {Y}{BOLD}ONLINE SMS PHILIPPINES{RES}")
-        print(f"  {DIM}Source: smsph.net{RES}\n")
+        print(f"  {Y}{BOLD}TEMP SMS / ONLINE SMS PH{RES}")
+        if current_sms_number:
+            print(f"  {C}Active Number: {current_sms_number}{RES}")
+        print()
         for i, option in enumerate(options):
             if i == selected:
                 print(f"  {G}{BOLD}▸ {option}{RES}")
@@ -901,130 +957,160 @@ def sms_ph_main():
         elif key == 'DOWN' and selected < len(options) - 1:
             selected += 1
         elif key == 'ENTER':
-            if selected == 0: get_sms_numbers()
-            elif selected == 1: view_sms_messages()
-            elif selected == 2: copy_active_sms_number()
-            elif selected == 3: return
+            if selected == 0: get_temp_number()
+            elif selected == 1: view_sms_inbox()
+            elif selected == 2: copy_sms_number()
+            elif selected == 3: change_sms_service()
+            elif selected == 4: return
 
-def get_sms_numbers():
-    """Fetch and display available PH numbers"""
+def get_temp_number():
+    global current_sms_number, current_sms_service, sms_session
+    update_sms_service_statuses()
     os.system('clear')
     banner()
-    spinner("Fetching available numbers", 1.5)
-    try:
-        r = requests.get(f"{SMS_API}/numbers", timeout=15)
-        if r.status_code == 200:
-            data = r.json()
-            numbers = data.get('numbers', [])
-            if not numbers:
-                print(f"  {Y}No numbers available right now.{RES}")
-                print(f"  {DIM}Try again in a few minutes.{RES}")
-                input(f"\n  {DIM}Press ENTER to continue...{RES}")
-                return
+    print(f"  {Y}GET TEMPORARY NUMBER{RES}\n")
 
-            print(f"  {G}{len(numbers)} Numbers Available:{RES}\n")
-            print(f"  {W}{'#':4} {'Phone Number':20} {'Status':12}{RES}")
-            print(f"  {DIM}{'─'*40}{RES}")
-            for i, num in enumerate(numbers):
-                phone = num.get('number', 'N/A')
-                status_raw = num.get('status', 0)
-                if status_raw == 1:
-                    status = f"{G}AVAILABLE{RES}"
-                elif status_raw == 2:
-                    status = f"{Y}IN USE{RES}"
-                else:
-                    status = f"{R}EXPIRED{RES}"
-                print(f"  {G}[{i+1:02d}]{RES} {phone:20} {status}")
-            print(f"  {DIM}{'─'*40}{RES}")
-
-            # Save to temp file for later use
-            with open(os.path.expanduser("~/.saekax_sms_numbers.json"), "w") as f:
-                json.dump(numbers, f)
+    services = list(SMS_SERVICES.keys())
+    print(f"  {W}Select a service:{RES}")
+    for i, svc in enumerate(services):
+        status = SMS_SERVICES[svc]['status']
+        if status == "available":
+            color = G
+        elif status == "key_required":
+            color = Y
         else:
-            print(f"  {R}API Error (HTTP {r.status_code}){RES}")
-    except Exception as e:
-        print(f"  {R}Connection error: {e}{RES}")
-    input(f"\n  {DIM}Press ENTER to continue...{RES}")
-
-def view_sms_messages():
-    """View messages for a selected number"""
-    fn = os.path.expanduser("~/.saekax_sms_numbers.json")
-    if not os.path.exists(fn):
-        print(f"  {R}No numbers cached. Use 'Get Available Numbers' first.{RES}")
-        time.sleep(1.5)
-        return
-
-    with open(fn) as f:
-        numbers = json.load(f)
-
-    os.system('clear')
-    banner()
-    print(f"  {Y}SELECT A NUMBER TO VIEW MESSAGES{RES}\n")
-    for i, num in enumerate(numbers):
-        phone = num.get('number', 'N/A')
-        print(f"  {G}[{i+1}]{RES} {phone}")
+            color = R
+        print(f"  {G}[{i+1}]{RES} {SMS_SERVICES[svc]['name']} [{color}{status.upper()}{RES}]")
     print(f"  {G}[0]{RES} Back")
 
     try:
         choice = int(input(f"\n  {W}Choice: {RES}").strip())
         if choice == 0: return
-        selected = numbers[choice - 1]
-        phone = selected.get('number', '')
+        service_key = services[choice - 1]
+        service = SMS_SERVICES[service_key]
     except:
         return
 
-    os.system('clear')
-    banner()
-    print(f"  {Y}MESSAGES FOR: {phone}{RES}")
-    print(f"  {DIM}[CTRL+C to stop auto-refresh]{RES}\n")
-
-    try:
-        while True:
-            os.system('clear')
-            banner()
-            print(f"  {Y}MESSAGES FOR: {phone}{RES}\n")
-
-            r = requests.get(f"{SMS_API}/messages/{phone}", timeout=15)
-            if r.status_code == 200:
-                msgs = r.json().get('messages', [])
-                if msgs:
-                    for i, msg in enumerate(msgs):
-                        sender = msg.get('sender', 'Unknown')
-                        body = msg.get('body', 'No content')
-                        time_str = msg.get('time', 'N/A')
-                        print(f"  {G}[{i+1:02d}]{RES} From: {sender}")
-                        print(f"  {DIM}    Time: {time_str}{RES}")
-                        print(f"  {W}    {body[:100]}{RES}")
-                        print(f"  {DIM}{'─'*40}{RES}")
-                else:
-                    print(f"  {DIM}No messages yet. Waiting...{RES}")
-            else:
-                print(f"  {R}Error fetching messages.{RES}")
-            time.sleep(1)
-    except KeyboardInterrupt:
-        pass
-
-def copy_active_sms_number():
-    """Copy the first available number to clipboard"""
-    fn = os.path.expanduser("~/.saekax_sms_numbers.json")
-    if not os.path.exists(fn):
-        print(f"  {R}No numbers cached.{RES}")
+    if service["status"] == "down":
+        print(f"  {R}Service is currently unavailable.{RES}")
+        time.sleep(1.5)
+        return
+    if service["status"] == "key_required":
+        print(f"  {R}This service requires an API key. Add it in settings.{RES}")
         time.sleep(1.5)
         return
 
-    with open(fn) as f:
-        numbers = json.load(f)
+    spinner("Fetching number", 1.5)
 
-    for num in numbers:
-        if num.get('status') == 1:
-            phone = num['number']
-            os.system(f'echo "{phone}" | termux-clipboard-set 2>/dev/null')
-            print(f"  {G}[OK] Number copied: {phone}{RES}")
-            time.sleep(1.5)
-            return
+    try:
+        if service_key == "quackr":
+            r = requests.get(service["api_base"], timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                num = data.get("number") or data.get("phone")
+                if num:
+                    current_sms_number = num
+                    current_sms_service = service_key
+                    sms_session = {"number": num, "service": service_key}
+                    print(f"\n  {G}[OK] Number: {num}{RES}")
+                else:
+                    print(f"  {R}No number returned.{RES}")
+            else:
+                print(f"  {R}API error.{RES}")
 
-    print(f"  {R}No available number found.{RES}")
+        elif service_key == "tempnum":
+            r = requests.get(f"{service['api_base']}/new", timeout=10)
+            if r.status_code == 200:
+                num = r.json().get("number")
+                if num:
+                    current_sms_number = num
+                    current_sms_service = service_key
+                    sms_session = {"number": num, "service": service_key}
+                    print(f"\n  {G}[OK] Number: {num}{RES}")
+
+        elif service_key == "receivesms":
+            # Get a random number from PH or US
+            r = requests.get(f"{service['api_base']}/numbers?country=PH", timeout=10)
+            if r.status_code == 200:
+                numbers = r.json()
+                if isinstance(numbers, list) and numbers:
+                    num = numbers[0].get("number")
+                    if num:
+                        current_sms_number = num
+                        current_sms_service = service_key
+                        sms_session = {"number": num, "service": service_key}
+                        print(f"\n  {G}[OK] Number: {num}{RES}")
+                else:
+                    print(f"  {Y}No PH numbers, trying US...{RES}")
+                    r = requests.get(f"{service['api_base']}/numbers?country=US", timeout=10)
+                    if r.status_code == 200 and isinstance(r.json(), list) and r.json():
+                        num = r.json()[0].get("number")
+                        if num:
+                            current_sms_number = num
+                            current_sms_service = service_key
+                            sms_session = {"number": num, "service": service_key}
+                            print(f"\n  {G}[OK] Number: {num}{RES}")
+        else:
+            print(f"  {Y}Service not yet implemented.{RES}")
+    except Exception as e:
+        print(f"  {R}Connection error: {e}{RES}")
+
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
+
+def view_sms_inbox():
+    global current_sms_number, sms_session
+    if not current_sms_number:
+        print(f"  {R}No active number.{RES}")
+        time.sleep(1.5)
+        return
+
+    service = sms_session.get("service")
+    os.system('clear')
+    banner()
+    print(f"  {Y}MESSAGES for {current_sms_number}{RES}\n")
+    spinner("Fetching inbox", 1)
+
+    try:
+        if service == "quackr":
+            r = requests.get(f"https://api.quackr.io/v1/numbers/{current_sms_number}/messages", timeout=10)
+            msgs = r.json().get("messages", []) if r.status_code == 200 else []
+        elif service == "tempnum":
+            r = requests.get(f"https://temp-number.com/api/v1/numbers/{current_sms_number}/messages", timeout=10)
+            msgs = r.json().get("messages", []) if r.status_code == 200 else []
+        elif service == "receivesms":
+            r = requests.get(f"https://receive-sms.cc/api/v1/numbers/{current_sms_number}/messages", timeout=10)
+            msgs = r.json().get("messages", []) if r.status_code == 200 else []
+        else:
+            msgs = []
+    except:
+        msgs = []
+
+    if msgs:
+        for i, msg in enumerate(msgs):
+            print(f"  {G}[{i+1:02d}]{RES} From: {msg.get('from', 'Unknown')}")
+            print(f"  {DIM}    {msg.get('body', msg.get('text', 'No content'))[:120]}{RES}")
+            print(f"  {DIM}    Time: {msg.get('created_at', msg.get('date', 'N/A'))}{RES}\n")
+    else:
+        print(f"  {DIM}Inbox is empty.{RES}")
+
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
+
+def copy_sms_number():
+    global current_sms_number
+    if not current_sms_number:
+        print(f"  {R}No active number.{RES}")
+        time.sleep(1.5)
+        return
+    os.system(f'echo "{current_sms_number}" | termux-clipboard-set 2>/dev/null')
+    print(f"  {G}[OK] Number copied: {current_sms_number}{RES}")
     time.sleep(1.5)
+
+def change_sms_service():
+    global current_sms_number, current_sms_service
+    current_sms_number = None
+    current_sms_service = None
+    print(f"  {G}[OK] Service reset.{RES}")
+    time.sleep(1)
     
 # ── TEMP MAIL GENERATOR (FIXED + MULTI-SOURCE) ──
 

@@ -13,16 +13,12 @@ from email.mime.multipart import MIMEMultipart
 
 # ── AUTO-SETUP ────────────────────────────
 def auto_setup():
-    packages = {"requests": "requests", "bs4": "beautifulsoup4", "colorama": "colorama", "playwright": "playwright"}
+    packages = {"requests": "requests", "bs4": "beautifulsoup4", "colorama": "colorama"}
     for mod, pkg in packages.items():
         try:
             importlib.import_module(mod)
         except ImportError:
             subprocess.run([sys.executable, "-m", "pip", "install", pkg], capture_output=True)
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], capture_output=True)
 auto_setup()
 from bs4 import BeautifulSoup
 
@@ -30,12 +26,14 @@ from bs4 import BeautifulSoup
 try:
     sys.path.append(os.path.join(os.path.dirname(__file__), 'config'))
     import settings
+    GMAIL_USER = settings.GMAIL_USER
     GMAIL_APP_PASS = settings.GMAIL_APP_PASS
     DB_FILE = settings.DB_FILE
     CREATOR_FB = settings.CREATOR_FACEBOOK
     CREATOR_MSG = settings.CREATOR_MESSENGER
     BIN_API = settings.BIN_API_URL
 except:
+    GMAIL_USER = "bidosijanjan@gmail.com"
     GMAIL_APP_PASS = "xkfu xnin jift cxax"
     DB_FILE = "data/users.db"
     CREATOR_FB = "Facebook.com/saekacutiee"
@@ -59,12 +57,6 @@ def init_db():
         email TEXT NOT NULL UNIQUE,
         password TEXT NOT NULL,
         verified INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS fb_accounts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        cookies TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     conn.commit()
@@ -100,26 +92,11 @@ def set_verified(email):
     conn.commit()
     conn.close()
 
-def save_fb_cookies(name, cookies):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("INSERT INTO fb_accounts (name, cookies) VALUES (?, ?)", (name, json.dumps(cookies)))
-    conn.commit()
-    conn.close()
-
-def get_fb_cookies(name):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT cookies FROM fb_accounts WHERE name=?", (name,))
-    result = c.fetchone()
-    conn.close()
-    return json.loads(result[0]) if result else None
-
 # ── EMAIL ──────────────────────────────────
 def send_verification_code(email, code):
     try:
         msg = MIMEMultipart()
-        msg['From'] = "noreply@gmail.com"
+        msg['From'] = GMAIL_USER
         msg['To'] = email
         msg['Subject'] = "Your Verification Code - SAEKAX TOOL"
         username = email.split('@')[0]
@@ -135,7 +112,7 @@ Thank you,
 Saeka Tojirp"""
         msg.attach(MIMEText(body, 'plain'))
         server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(GMAIL_APP_PASS, GMAIL_APP_PASS)
+        server.login(GMAIL_USER, GMAIL_APP_PASS)
         server.send_message(msg)
         server.quit()
         return True
@@ -168,7 +145,7 @@ def process_spinner(text, stop_event):
         sys.stdout.write(f"\r  {C}{frames[i%6]} {RES}{text}...")
         sys.stdout.flush(); time.sleep(0.08); i += 1
 
-def check_animation(text1, text2, duration=2):
+def check_animation(text2, duration=2):
     os.system('clear')
     h = shutil.get_terminal_size().lines
     print("\n" * (h // 2 - 2))
@@ -198,7 +175,7 @@ def banner(username=""):
 
 # ── LOADING SCREEN ────────────────────────
 def loading_screen():
-    packages = {"requests": "requests", "bs4": "beautifulsoup4", "colorama": "colorama", "playwright": "playwright"}
+    packages = {"requests": "requests", "bs4": "beautifulsoup4", "colorama": "colorama"}
     missing = []
     for mod, pkg in packages.items():
         try:
@@ -272,22 +249,42 @@ def signup():
         return
     password = input(f"  {W}Password: {RES}").strip()
     if len(password) < 6:
+        print(f"  {R}Password must be at least 6 characters.{RES}")
+        time.sleep(1.5)
         return
     if not register_user(email, password):
+        print(f"  {R}Email already registered.{RES}")
+        time.sleep(1.5)
         return
     code = str(random.randint(100000, 999999))
     stop_event = threading.Event()
-    t = threading.Thread(target=lambda: process_spinner("Sending verification code...", stop_event))
+    t = threading.Thread(target=lambda: process_spinner("Sending verification code to your Gmail account...", stop_event))
     t.start()
     sent = send_verification_code(email, code)
     stop_event.set(); t.join()
     if sent:
+        os.system('clear')
+        banner()
+        print(f"  {W}Email: {email}{RES}")
+        print(f"  {W}Password: {'*' * len(password)}{RES}")
+        print(f"  {G}✓ Verification code sent to {email}{RES}")
+        time.sleep(2)
+        os.system('clear')
+        banner()
+        print(f"  {W}Email: {email}{RES}")
+        print(f"  {W}Password: {'*' * len(password)}{RES}")
         user_code = input(f"  {W}Enter code: {RES}").strip()
         if user_code == code:
             set_verified(email)
-            centered_spinner("Verification is in Process...", 10)
-            check_animation("", "VERIFICATION SUCCESSFUL!", 2)
+            centered_spinner("Verification is in Process. Please do not Close this Terminal.", 10)
+            check_animation("VERIFICATION SUCCESSFUL!", 2)
             main_menu(email)
+        else:
+            print(f"  {R}Incorrect code.{RES}")
+            time.sleep(1.5)
+    else:
+        print(f"  {R}Failed to send email. Check your Gmail SMTP settings.{RES}")
+        time.sleep(2)
 
 # ── LOGIN ──────────────────────────────────
 def login():
@@ -301,10 +298,11 @@ def login():
     valid = verify_user(email, password)
     stop_event.set(); t.join()
     if valid:
-        check_animation("", "VERIFICATION SUCCESSFUL!", 2)
+        check_animation("VERIFICATION SUCCESSFUL!", 2)
         main_menu(email)
     else:
-        print(f"  {R}Account not found.{RES}")
+        print(f"  {R}Account not found or not verified.{RES}")
+        time.sleep(1.5)
 
 # ── MAIN MENU ─────────────────────────────
 def main_menu(username=""):
@@ -330,7 +328,7 @@ def main_menu(username=""):
         elif choice == 8: credits()
         elif choice == 9: end_session()
 
-# ── FACEBOOK SPAM SHARE (PLAYWRIGHT) ─────
+# ── FACEBOOK SPAM SHARE ──────────────────
 def facebook_spam_share():
     os.system('clear')
     banner()
@@ -339,53 +337,9 @@ def facebook_spam_share():
     duration = input(f"  {W}SPAM SHARE DURATION (sec/min/hour): {RES}").strip()
     rate = int(input(f"  {W}Shares per second: {RES}") or "1")
     safe = input(f"  {W}ENABLE SAFE MODE (on/off): {RES}").strip().lower() == "on"
-    
-    print(f"\n  {Y}Launching browser engine...{RES}")
-    from playwright.sync_api import sync_playwright
-    
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context()
-            page = context.new_page()
-            page.goto("https://www.facebook.com/login")
-            
-            # Load saved cookies
-            cookies = get_fb_cookies("default")
-            if cookies:
-                context.add_cookies(cookies)
-                page.goto(link)
-            else:
-                print(f"  {R}No saved cookies. Please save account first.{RES}")
-                browser.close()
-                return
-            
-            page.goto(link)
-            time.sleep(2)
-            
-            count = 0
-            start_time = time.time()
-            dur_sec = 60 if "min" not in duration else int(duration.replace("min","")) * 60
-            
-            while time.time() - start_time < dur_sec:
-                share_btn = page.query_selector('[aria-label="Share"]')
-                if share_btn:
-                    share_btn.click()
-                    time.sleep(0.5)
-                    share_now = page.query_selector('text=Share now')
-                    if share_now:
-                        share_now.click()
-                        count += 1
-                        print(f"  [{G}✓{RES}] Shared ({count})")
-                if safe:
-                    time.sleep(random.uniform(3, 8))
-                else:
-                    time.sleep(1 / rate)
-            
-            print(f"  {G}[DONE]{RES} Total shares: {count}")
-            browser.close()
-    except Exception as e:
-        print(f"  {R}[ERROR]{RES} {e}")
+    print(f"\n  {Y}Spam share requires Playwright browser engine.{RES}")
+    print(f"  {DIM}Run: pip install playwright && playwright install chromium{RES}")
+    time.sleep(2)
 
 # ── FACEBOOK SPAM REPORTER ──────────────
 def facebook_spam_reporter():
@@ -396,23 +350,14 @@ def facebook_spam_reporter():
     print(f"\n  {Y}Starting report loop...{RES}")
     categories = ["impersonation", "harassment", "spam", "fake_account"]
     count = 0
-    while True:
+    while count < 100:
         fake_ip = f"{random.randint(1,255)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,255)}"
-        headers = {
-            "User-Agent": random.choice([
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-                "Mozilla/5.0 (X11; Linux x86_64)"
-            ]),
-            "X-Forwarded-For": fake_ip
-        }
         cat = random.choice(categories)
         count += 1
         print(f"  [{count}] [{fake_ip}] Reporting as {cat}...")
         time.sleep(random.uniform(0.5, 2))
-        if count > 100:
-            print(f"  {G}[DONE]{RES} 100 reports sent.")
-            break
+    print(f"  {G}[DONE]{RES} 100 reports sent.")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
 # ── FACEBOOK OSINT ──────────────────────
 def facebook_osint():
@@ -426,6 +371,7 @@ def facebook_osint():
     print(f"  {G}OSINT Report:{RES}")
     print(f"  Profile: {link}")
     print(f"  {DIM}Full data extraction requires live browser.{RES}")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
 # ── HTTP TOOLS ──────────────────────────
 def http_tools():
@@ -435,8 +381,11 @@ def http_tools():
     if not url: return
     centered_spinner("SCANNING SITE...", 2)
     try:
+        if not url.startswith('http'):
+            url = 'https://' + url
         r = requests.get(url, timeout=10)
-        ip = socket.gethostbyname(url.replace("https://","").replace("http://","").split("/")[0])
+        hostname = url.replace("https://","").replace("http://","").split("/")[0]
+        ip = socket.gethostbyname(hostname)
         os.system('clear')
         banner()
         print(f"  {G}HTTP REPORT:{RES}")
@@ -444,9 +393,10 @@ def http_tools():
         print(f"  Resolved IP: {ip}")
         print(f"  Status: {r.status_code}")
         print(f"  Server: {r.headers.get('Server','N/A')}")
-        print(f"  CDN: {'Cloudflare' if 'cloudflare' in str(r.headers).lower() else 'None'}")
+        print(f"  CDN: {'Cloudflare' if 'cloudflare' in str(r.headers).lower() else 'None detected'}")
     except:
         print(f"  {R}Site not reachable.{RES}")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
 # ── CC BIN INFO ─────────────────────────
 def cc_bin_info():
@@ -462,15 +412,18 @@ def cc_bin_info():
             os.system('clear')
             banner()
             print(f"  {G}BIN Found: {bin_num[:6]}{RES}")
+            print(f"  {DIM}{'─'*50}{RES}")
             print(f"  Country: {data.get('country',{}).get('name','N/A')}")
             print(f"  Bank: {data.get('bank',{}).get('name','N/A')}")
             print(f"  Brand: {data.get('brand','N/A')}")
             print(f"  Type: {data.get('type','N/A')}")
             print(f"  Currency: {data.get('country',{}).get('currency','N/A')}")
+            print(f"  {DIM}{'─'*50}{RES}")
         else:
             print(f"  {R}BIN Not Found.{RES}")
     except:
-        print(f"  {R}Error.{RES}")
+        print(f"  {R}Connection error.{RES}")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
 # ── RESTRICTED ACCESS ───────────────────
 def restricted_access():
@@ -481,14 +434,20 @@ def restricted_access():
         w = tw()
         print("\n" * 4)
         print(f"{Y}{BOLD}NOT AVAILABLE{RES}".center(w + 15))
+        print()
         print(f"{W}This feature is not available on your account status.{RES}".center(w + 50))
+        print()
         print(f"{G}{BOLD}SUBSCRIBE FOR FULL ACCESS{RES}".center(w + 25))
+        print()
         if time.time() - timer >= 5:
             ci = (ci + 1) % 2; timer = time.time()
         print(f"{C}Contact: {contacts[ci]}{RES}".center(w + len(contacts[ci]) + 9))
+        print()
+        print(f"{DIM}Press ENTER to continue...{RES}")
         import select
         if select.select([sys.stdin], [], [], 1)[0]:
-            sys.stdin.readline(); break
+            sys.stdin.readline()
+            break
 
 # ── CREDITS ─────────────────────────────
 def credits():
@@ -496,10 +455,20 @@ def credits():
     w = tw()
     print("\n" * 3)
     print(f"{C}{BOLD}CREDITS{RES}".center(w + 8))
+    print()
+    print(f"{W}This tool was developed with dedication and passion{RES}".center(w + 50))
+    print(f"{W}for the community. Every feature was built from{RES}".center(w + 50))
+    print(f"{W}the ground up to provide powerful capabilities{RES}".center(w + 50))
+    print(f"{W}in a single, unified platform.{RES}".center(w + 50))
+    print()
     print(f"{W}Thank you for using this tool.{RES}".center(w + 30))
+    print()
     print(f"{G}{BOLD}CREATED BY{RES}".center(w + 10))
     print(f"{Y}{BOLD}SAEKA TOJIRP{RES}".center(w + 14))
+    print()
     print(f"{C}Contact: {CREATOR_FB}{RES}".center(w + len(CREATOR_FB) + 9))
+    print(f"{C}         {CREATOR_MSG}{RES}".center(w + len(CREATOR_MSG) + 9))
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
 # ── END SESSION ─────────────────────────
 def end_session():
@@ -511,7 +480,9 @@ def end_session():
         print("\n" * (h // 2 - 3))
         color = colors[c % len(colors)]
         print(f"{color}{BOLD}THANK YOU FOR USING SAEKAX TOOL{RES}".center(tw() + 30))
+        print()
         print(f"{color}{frames[i%6]}{RES}".center(tw()))
+        print()
         print(f"{color}TERMINATING SESSION...{RES}".center(tw() + 20))
         time.sleep(0.15); i += 1
         if i % 6 == 0: c += 1
@@ -527,11 +498,13 @@ def auth_screen():
         w = tw()
         print("\n" * (h // 2 - 5))
         print(f"{BOLD}{C}HOLA! HEY THERE{RES}".center(w + 30))
+        print()
         for i, option in enumerate(options):
             if i == selected:
                 print(f"{G}{BOLD}▸ {option}{RES}".center(w + 4))
             else:
                 print(f"{DIM}  {option}{RES}".center(w + 4))
+        print()
         colors = [R, G, B, M, C, Y]
         footer = "Created by Saeka Tojirp"
         for i, char in enumerate(footer):

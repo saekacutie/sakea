@@ -15,7 +15,6 @@ WHITE='\033[1;37m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
-# Portable terminal width
 get_width() {
     stty size 2>/dev/null | cut -d' ' -f2 || echo 80
 }
@@ -26,7 +25,7 @@ center_text() {
     local clean_text=$(echo -e "$text" | sed 's/\x1b\[[0-9;]*m//g')
     local pad=$(( (width - ${#clean_text}) / 2 ))
     [ $pad -lt 0 ] && pad=0
-    printf "%*s%s\n" $pad "" "$text"
+    printf "%*s%b\n" $pad "" "$text"
 }
 
 clear
@@ -43,32 +42,35 @@ loading_spinner() {
     while kill -0 $pid 2>/dev/null; do
         local frame="${frames:$i:1}"
         local text="Installing ${package}..."
-        local clean_text=$(echo -e "$text" | sed 's/\x1b\[[0-9;]*m//g')
         local width=$(get_width)
-        local total=$(( ${#clean_text} + 2 ))
+        local total=$(( ${#text} + 2 ))
         local pad=$(( (width - total) / 2 ))
         [ $pad -lt 0 ] && pad=0
-        printf "\r%*s%s %s" $pad "" "$frame" "$clean_text"
+        printf "\r%*s%s %s" $pad "" "$frame" "$text"
         i=$(( (i + 1) % 6 ))
         sleep 0.1
     done
+    printf "\r%*s%s %s\n" $pad "" "✔" "$text"
 }
+
+# Suppress all output
+exec 3>&2
+exec 2>/dev/null
 
 { pkg update -y -qq && pkg upgrade -y -qq; } &
 loading_spinner $! "system packages"
-echo ""
 
 { pkg install python python-pip git -y -qq; } &
 loading_spinner $! "Python and Git"
-echo ""
 
-{ pip install requests beautifulsoup4 colorama playwright -q; } &
+{ pip install requests beautifulsoup4 colorama -q; } &
 loading_spinner $! "Python modules"
-echo ""
 
 { curl -sL https://raw.githubusercontent.com/saekacutie/sakea/main/main.py -o $HOME/main.py && chmod +x $HOME/main.py; } &
 loading_spinner $! "main script"
-echo ""
+
+# Restore stderr
+exec 2>&3
 
 if ! grep -q "alias saeka=" $HOME/.bashrc 2>/dev/null; then
     echo "alias saeka='python3 $HOME/main.py'" >> $HOME/.bashrc

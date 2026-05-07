@@ -330,15 +330,15 @@ def main_menu(username=""):
         "CC BIN INFO",
         "FREENET PH METHODS",
         "ONLINE TEMPNUMBER",
-        "SENT SMS ONLINE"
+        "SENT SMS ONLINE",
         "TEMPMAIL",
-        "UPDATE SAEKAX TOOL"
+        "UPDATE SAEKAX TOOL",
         "CREDITS",
-        "END SESSION"
+        "END SESSION",
     ]
     while True:
         choice = arrow_menu(options, username)
-        if choice == 1: facebook_spam_share()
+        elif choice == 1: facebook_spam_share()
         elif choice == 2: facebook_spam_reporter()
         elif choice == 3: save_fb_menu()
         elif choice == 4: http_tools()

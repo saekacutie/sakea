@@ -330,6 +330,7 @@ def main_menu(username=""):
         "CC BIN INFO",
         "FREENET PH METHODS",
         "ONLINE TEMPNUMBER",
+        "SENT SMS ONLINE"
         "TEMPMAIL",
         "UPDATE SAEKAX TOOL"
         "CREDITS",
@@ -344,10 +345,11 @@ def main_menu(username=""):
         elif choice == 5: cc_bin_info()
         elif choice == 6: freenet_main()
         elif choice == 7: sms_ph_main()
-        elif choice == 8: tempmail_main()
-        elif choice == 9: update_tool()
-        elif choice == 10: credits()
-        elif choice == 11: end_session()
+        elif choice == 8: send_sms_main()
+        elif choice == 9: tempmail_main()
+        elif choice == 10: update_tool()
+        elif choice == 11: credits()
+        elif choice == 12: end_session()
 
 # ── SAVE FB ACCOUNT ────────────────────
 def save_fb_menu():
@@ -1113,6 +1115,279 @@ def change_sms_service():
     current_sms_service = None
     print(f"  {G}[OK] Service reset.{RES}")
     time.sleep(1)
+
+# ── SEND SMS PH (MULTI-SOURCE) ─────────────
+SMS_SEND_SOURCES = {
+    "textbelt": {
+        "name": "Textbelt (Free)",
+        "api_url": "https://textbelt.com/text",
+        "key": "textbelt",           # free key – 1 SMS per day per IP
+        "status": "available",
+        "description": "1 free SMS/day. No sign‑up.",
+    },
+    "semaphore": {
+        "name": "Semaphore PH",
+        "api_url": "https://api.semaphore.co/api/v4/messages",
+        "key": "",                   # user must supply
+        "status": "available",
+        "description": "PH carrier API. Needs API key.",
+    },
+    "itexmo": {
+        "name": "iTexMo",
+        "api_url": "https://www.itexmo.com/api",
+        "key": "",
+        "status": "down",
+        "description": "PH SMS gateway. Needs account.",
+    },
+    "email_gateway": {
+        "name": "Email-to-SMS",
+        "api_url": "smtp://",
+        "key": "",
+        "status": "available",
+        "description": "Free via carrier email‑to‑SMS gateways.",
+    },
+}
+
+PH_CARRIER_GATEWAYS = {
+    "Smart":   "isms.smart.com.ph",
+    "TNT":     "tntsms.com",
+    "Globe":   "txt.globe.com.ph",
+    "TM":      "txt.tm.com.ph",
+    "Sun":     "sun.com.ph",
+    "DITO":    "sms.dito.ph",
+}
+
+def check_sms_send_statuses():
+    """Quick availability check for each SMS sending source."""
+    for key, svc in SMS_SEND_SOURCES.items():
+        if key == "email_gateway":
+            svc["status"] = "available"
+            continue
+        if key == "textbelt":
+            # always available for the free key
+            svc["status"] = "available"
+            continue
+        # For others, leave as-is (user must provide API key)
+        if not svc.get("key"):
+            svc["status"] = "key_required"
+
+def send_sms_main():
+    """Main entry point for SEND SMS PH."""
+    check_sms_send_statuses()
+    options = [
+        "Send an SMS Message",
+        "Change API Key",
+        "Check Service Status",
+        "Back to Main Menu",
+    ]
+    selected = 0
+    while True:
+        os.system('clear')
+        banner()
+        print(f"  {Y}{BOLD}SEND SMS – ONLINE PH{RES}\n")
+        for i, option in enumerate(options):
+            if i == selected:
+                print(f"  {G}{BOLD}▸ {option}{RES}")
+            else:
+                print(f"  {DIM}  {option}{RES}")
+        key_press = get_key()
+        if key_press == 'UP' and selected > 0:
+            selected -= 1
+        elif key_press == 'DOWN' and selected < len(options) - 1:
+            selected += 1
+        elif key_press == 'ENTER':
+            if selected == 0: send_sms_screen()
+            elif selected == 1: change_sms_api_key()
+            elif selected == 2: check_sms_service_status()
+            elif selected == 3: return
+
+def send_sms_screen():
+    """Interactive screen to send an SMS."""
+    os.system('clear')
+    banner()
+    print(f"  {Y}SEND SMS MESSAGE{RES}\n")
+
+    # Pick source
+    print(f"  {W}Select sending method:{RES}")
+    srcs = list(SMS_SEND_SOURCES.keys())
+    for i, key in enumerate(srcs):
+        svc = SMS_SEND_SOURCES[key]
+        color = G if svc["status"] == "available" else Y if svc["status"] == "key_required" else R
+        print(f"  {G}[{i+1}]{RES} {svc['name']} [{color}{svc['status'].upper()}{RES}]")
+    print(f"  {G}[0]{RES} Back")
+
+    try:
+        ch = int(input(f"\n  {W}Choice [1]: {RES}").strip() or "1")
+        if ch == 0: return
+        source_key = srcs[ch - 1]
+    except:
+        return
+
+    # Phone number
+    phone = input(f"  {W}Phone Number (+63XXXXXXXXXX): {RES}").strip()
+    if not phone:
+        print(f"  {R}Phone number is required.{RES}")
+        time.sleep(1.5); return
+
+    # Clean up phone number
+    phone = phone.replace(" ", "").replace("-", "")
+    if phone.startswith("0"):
+        phone = "+63" + phone[1:]
+    elif not phone.startswith("+"):
+        phone = "+63" + phone
+
+    # Message
+    message = input(f"  {W}Message: {RES}").strip()
+    if not message:
+        print(f"  {R}Message is required.{RES}")
+        time.sleep(1.5); return
+
+    # Send
+    spinner("Sending SMS", 2)
+    result = send_sms(source_key, phone, message)
+
+    os.system('clear')
+    banner()
+    print(f"  {Y}SMS SEND RESULT{RES}\n")
+    if result["success"]:
+        print(f"  {G}[✓] Message sent successfully!{RES}")
+        print(f"  Source: {result.get('source', 'N/A')}")
+        print(f"  Text ID: {result.get('textId', 'N/A')}")
+        print(f"  Quota Left: {result.get('quotaRemaining', 'N/A')}")
+    else:
+        print(f"  {R}[✗] Failed to send message.{RES}")
+        print(f"  Error: {result.get('error', 'Unknown error')}")
+
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
+
+def send_sms(source_key, phone, message):
+    """Send an SMS via the chosen source. Returns dict with success/error."""
+    svc = SMS_SEND_SOURCES[source_key]
+
+    # ── Textbelt (free key) ──
+    if source_key == "textbelt":
+        try:
+            r = requests.post(svc["api_url"], data={
+                "phone": phone,
+                "message": message,
+                "key": svc.get("key", "textbelt"),
+            }, timeout=15)
+            data = r.json()
+            data["source"] = "Textbelt"
+            return data
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ── Semaphore ──
+    if source_key == "semaphore":
+        api_key = svc.get("key", "")
+        if not api_key:
+            # Prompt once
+            api_key = input(f"  {W}Semaphore API Key: {RES}").strip()
+            if not api_key:
+                return {"success": False, "error": "API key required"}
+            SMS_SEND_SOURCES["semaphore"]["key"] = api_key
+        try:
+            r = requests.post(svc["api_url"], json={
+                "apikey": api_key,
+                "number": phone,
+                "message": message,
+            }, timeout=15)
+            data = r.json()
+            # Semaphore returns list or dict; normalise
+            if isinstance(data, list) and len(data) > 0:
+                first = data[0]
+                success = first.get("status") == "Queued"
+                return {
+                    "success": success,
+                    "source": "Semaphore",
+                    "message_id": first.get("message_id"),
+                    "error": None if success else first.get("message"),
+                }
+            return {"success": False, "error": str(data)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ── iTexMo ──
+    if source_key == "itexmo":
+        return {"success": False, "error": "iTexMo requires account setup. Use Textbelt."}
+
+    # ── Email-to-SMS gateway ──
+    if source_key == "email_gateway":
+        # Guess carrier from prefix
+        prefix = phone.replace("+63", "0")[1:4]
+        carrier = "Smart"
+        if prefix in ("905","906","915","916","917","926","927","935","936","937","975","976","977","995","996","997"):
+            carrier = "Globe"
+        elif prefix in ("908","918","919","920","921","928","929","930","938","939","946","947","948","949","950","951","998","999"):
+            carrier = "Smart"
+        elif prefix in ("922","923","924","925","931","932","933","934","940","941","942","943","973","974"):
+            carrier = "Sun"
+        elif prefix in ("961","962","963","964","965","966","967","968","969","970","971","972"):
+            carrier = "TM"
+        elif prefix in ("981","982","983","984","985","986","987","988","989"):
+            carrier = "DITO"
+
+        gateway = PH_CARRIER_GATEWAYS.get(carrier, "isms.smart.com.ph")
+        local_number = phone.replace("+63", "0")
+        to_addr = f"{local_number}@{gateway}"
+
+        try:
+            # Use Gmail SMTP already configured
+            msg = MIMEMultipart()
+            msg['From'] = GMAIL_USER
+            msg['To'] = to_addr
+            msg['Subject'] = ""
+            msg.attach(MIMEText(message[:160], 'plain'))
+            server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+            server.login(GMAIL_USER, GMAIL_APP_PASS)
+            server.send_message(msg)
+            server.quit()
+            return {
+                "success": True,
+                "source": f"Email-to-SMS ({carrier})",
+                "textId": f"email-{int(time.time())}",
+                "quotaRemaining": "N/A",
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Email gateway failed: {e}"}
+
+    return {"success": False, "error": "Unknown source"}
+
+def change_sms_api_key():
+    """Change the API key for a service."""
+    os.system('clear')
+    banner()
+    print(f"  {Y}CHANGE SMS API KEY{RES}\n")
+    srcs = list(SMS_SEND_SOURCES.keys())
+    for i, key in enumerate(srcs):
+        print(f"  {G}[{i+1}]{RES} {SMS_SEND_SOURCES[key]['name']}")
+    print(f"  {G}[0]{RES} Back")
+    try:
+        ch = int(input(f"\n  {W}Choice: {RES}").strip())
+        if ch == 0: return
+        key = srcs[ch - 1]
+    except:
+        return
+    new_key = input(f"  {W}New API Key: {RES}").strip()
+    if new_key:
+        SMS_SEND_SOURCES[key]["key"] = new_key
+        SMS_SEND_SOURCES[key]["status"] = "available"
+        print(f"  {G}[OK] API key saved for {SMS_SEND_SOURCES[key]['name']}.{RES}")
+        time.sleep(1.5)
+
+def check_sms_service_status():
+    """Display current status of all SMS sources."""
+    check_sms_send_statuses()
+    os.system('clear')
+    banner()
+    print(f"  {Y}SMS SERVICE STATUS{RES}\n")
+    for key, svc in SMS_SEND_SOURCES.items():
+        color = G if svc["status"] == "available" else Y if svc["status"] == "key_required" else R
+        key_info = f" (key: {svc.get('key','')[:12]}...)" if svc.get("key") else ""
+        print(f"  [{color}{svc['status'].upper()}{RES}] {svc['name']}{key_info}")
+        print(f"  {DIM}    {svc['description']}{RES}\n")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
     
 # ── TEMP MAIL GENERATOR (FIXED + MULTI-SOURCE) ──
 

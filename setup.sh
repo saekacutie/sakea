@@ -15,11 +15,16 @@ WHITE='\033[1;37m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
-# Centered bold title
+# Portable terminal width
+get_width() {
+    stty size 2>/dev/null | cut -d' ' -f2 || echo 80
+}
+
 center_text() {
     local text="$1"
-    local width=$(tput cols)
+    local width=$(get_width)
     local pad=$(( (width - ${#text}) / 2 ))
+    [ $pad -lt 0 ] && pad=0
     printf "%*s%s\n" $pad "" "$text"
 }
 
@@ -29,7 +34,6 @@ echo ""
 center_text "$(echo -e "${CYAN}${BOLD}SAEKA TOOL${RESET}")"
 echo ""
 
-# Function for animated loading
 loading_spinner() {
     local pid=$1
     local package=$2
@@ -37,37 +41,33 @@ loading_spinner() {
     local i=0
     while kill -0 $pid 2>/dev/null; do
         local frame="${frames:$i:1}"
-        local width=$(tput cols)
         local text="Installing ${package}..."
+        local width=$(get_width)
         local total=$(( ${#text} + 2 ))
         local pad=$(( (width - total) / 2 ))
+        [ $pad -lt 0 ] && pad=0
         printf "\r%*s%s %s" $pad "" "$frame" "$text"
         i=$(( (i + 1) % 6 ))
         sleep 0.1
     done
 }
 
-# Update packages
 { pkg update -y -qq && pkg upgrade -y -qq; } &
 loading_spinner $! "system packages"
 echo ""
 
-# Install Python and Git
 { pkg install python python-pip git -y -qq; } &
 loading_spinner $! "Python and Git"
 echo ""
 
-# Install Python dependencies
-{ pip install requests beautifulsoup4 colorama -q; } &
+{ pip install requests beautifulsoup4 colorama playwright -q; } &
 loading_spinner $! "Python modules"
 echo ""
 
-# Download main script
 { curl -sL https://raw.githubusercontent.com/saekacutie/sakea/main/main.py -o $HOME/main.py && chmod +x $HOME/main.py; } &
 loading_spinner $! "main script"
 echo ""
 
-# Create alias
 if ! grep -q "alias saeka=" $HOME/.bashrc 2>/dev/null; then
     echo "alias saeka='python3 $HOME/main.py'" >> $HOME/.bashrc
 fi

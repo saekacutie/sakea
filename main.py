@@ -329,7 +329,6 @@ def main_menu(username=""):
         "HTTP TOOLS",
         "CC BIN INFO",
         "FREENET PH METHODS",
-        "USEFUL TOOLS",
         "CREDITS",
         "END SESSION"
     ]
@@ -340,9 +339,9 @@ def main_menu(username=""):
         elif choice == 3: save_fb_menu()
         elif choice == 4: http_tools()
         elif choice == 5: cc_bin_info()
-        elif choice in (6, 7): restricted_access()
-        elif choice == 8: credits()
-        elif choice == 9: end_session()
+        elif choice == 6: freenet_main()
+        elif choice == 7: credits()
+        elif choice == 8: end_session()
 
 # ── SAVE FB ACCOUNT ────────────────────
 def save_fb_menu():
@@ -514,23 +513,362 @@ def cc_bin_info():
         print(f"  {R}Connection error.{RES}")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
-# ── RESTRICTED ACCESS ───────────────────
-def restricted_access():
-    contacts = [CREATOR_FB, CREATOR_MSG]
-    ci = 0; timer = time.time()
+# ── FREENET PH METHODS ─────────────────────
+FREENET_BUGBOSTS = {
+    "STS": {  # Smart / TNT / Sun
+        "name": "Smart/TNT/Sun",
+        "hosts": [
+            "smart.com.ph", "m.smart.com.ph", "tnt.ph", "sun.com.ph",
+            "gigalife.smart.com.ph", "my.smart.com.ph", "smartbro.net",
+            "connectivitycheck.gstatic.com", "clients3.google.com",
+            "l.google.com", "mtalk.google.com", "gstatic.com",
+            "0.freebasics.com", "freebasics.com", "internet.org",
+            "facebook.com", "m.facebook.com", "fbcdn.net",
+            "cdnjs.cloudflare.com", "workers.dev", "pages.dev",
+            "cloudflare.com", "speedtest.net", "github.com",
+            "shopee.ph", "lazada.com.ph",
+            "spotify.com", "netflix.com", "nflxvideo.net",
+        ],
+        "payload_templates": [
+            "CONNECT [host]:[port] HTTP/1.1\r\nHost: [sni]\r\nConnection: Keep-Alive\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: [sni]\r\nUser-Agent: Mozilla/5.0\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: [sni]\r\nX-Forwarded-Host: [sni]\r\nX-Forwarded-For: [sni]\r\n\r\n",
+            "GET http://[host]:[port]/ HTTP/1.1\r\nHost: [sni]\r\nConnection: Keep-Alive\r\n\r\n",
+            "HEAD / HTTP/1.1\r\nHost: [sni]\r\nConnection: Keep-Alive\r\n\r\n",
+        ],
+    },
+    "GTM": {  # Globe / TM
+        "name": "Globe/TM",
+        "hosts": [
+            "globe.com.ph", "m.globe.com.ph", "tm.com.ph",
+            "gcash.com", "mygcash.com", "globelines.com.ph",
+            "connectivitycheck.gstatic.com", "clients3.google.com",
+            "l.google.com", "mtalk.google.com", "gstatic.com",
+            "0.freebasics.com", "freebasics.com", "internet.org",
+            "facebook.com", "m.facebook.com", "fbcdn.net",
+            "cdnjs.cloudflare.com", "workers.dev", "pages.dev",
+            "cloudflare.com", "speedtest.net", "github.com",
+            "shopee.ph", "lazada.com.ph",
+            "spotify.com", "netflix.com", "nflxvideo.net",
+        ],
+        "payload_templates": [
+            "CONNECT [host]:[port] HTTP/1.1\r\nHost: [sni]\r\nConnection: Keep-Alive\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: [sni]\r\nUser-Agent: Mozilla/5.0\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: [sni]\r\nX-Forwarded-Host: [sni]\r\nX-Forwarded-For: [sni]\r\n\r\n",
+            "GET http://[host]:[port]/ HTTP/1.1\r\nHost: [sni]\r\nConnection: Keep-Alive\r\n\r\n",
+            "HEAD / HTTP/1.1\r\nHost: [sni]\r\nConnection: Keep-Alive\r\n\r\n",
+        ],
+    },
+    "DITO": {
+        "name": "DITO Telecommunity",
+        "hosts": [
+            "dito.ph", "business.dito.ph", "my.dito.ph", "galing.dito.ph",
+            "connectivitycheck.gstatic.com", "clients3.google.com",
+            "l.google.com", "mtalk.google.com", "gstatic.com",
+            "0.freebasics.com", "freebasics.com", "internet.org",
+            "facebook.com", "m.facebook.com", "fbcdn.net",
+            "cdnjs.cloudflare.com", "workers.dev", "pages.dev",
+            "cloudflare.com", "speedtest.net", "github.com",
+        ],
+        "payload_templates": [
+            "CONNECT [host]:[port] HTTP/1.1\r\nHost: [sni]\r\nConnection: Keep-Alive\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: [sni]\r\nUser-Agent: Mozilla/5.0\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: [sni]\r\nX-Forwarded-Host: [sni]\r\nX-Forwarded-For: [sni]\r\n\r\n",
+            "GET http://[host]:[port]/ HTTP/1.1\r\nHost: [sni]\r\nConnection: Keep-Alive\r\n\r\n",
+            "HEAD / HTTP/1.1\r\nHost: [sni]\r\nConnection: Keep-Alive\r\n\r\n",
+        ],
+    },
+}
+
+# Common SSH providers for freenet
+FREENET_SSH_PROVIDERS = [
+    {"name": "SSHOcean", "url": "sshocean.com"},
+    {"name": "FastSSH", "url": "fastssh.com"},
+    {"name": "SSHKit", "url": "sshkit.com"},
+    {"name": "TunnelSSH", "url": "tunnelssh.com"},
+    {"name": "SSHStores", "url": "sshstores.net"},
+]
+
+# CloudFront/Google IP ranges for host scanning
+CLOUDFRONT_RANGES = [
+    "13.249.0.0/16", "54.192.0.0/16", "54.230.0.0/17", "54.239.128.0/18",
+    "52.84.0.0/15", "52.222.0.0/17", "3.160.0.0/15",
+]
+
+GOOGLE_RANGES = [
+    "34.64.0.0/11", "34.96.0.0/12", "35.184.0.0/13", "35.224.0.0/12",
+    "130.211.0.0/16", "142.250.0.0/15",
+]
+
+def freenet_main():
+    """Main entry point for FREENET PH METHODS"""
+    options = [
+        "STS (Smart/TNT/Sun) Methods",
+        "GTM (Globe/TM) Methods",
+        "DITO Methods",
+        "Bug Host Scanner",
+        "Generate VPN Config",
+        "SSH Account Providers",
+        "Back to Main Menu",
+    ]
+    selected = 0
     while True:
         os.system('clear')
-        w = tw()
-        print("\n" * 4)
-        print(f"{Y}{BOLD}NOT AVAILABLE{RES}".center(w + 15))
-        print(f"{W}This feature is not available on your account status.{RES}".center(w + 50))
-        print(f"{G}{BOLD}SUBSCRIBE FOR FULL ACCESS{RES}".center(w + 25))
-        if time.time() - timer >= 5: ci = (ci + 1) % 2; timer = time.time()
-        print(f"{C}Contact: {contacts[ci]}{RES}".center(w + len(contacts[ci]) + 9))
-        import select
-        if select.select([sys.stdin], [], [], 1)[0]:
-            sys.stdin.readline(); break
+        banner()
+        print(f"  {Y}{BOLD}FREENET PH METHODS{RES}\n")
+        for i, option in enumerate(options):
+            if i == selected:
+                print(f"  {G}{BOLD}▸ {option}{RES}")
+            else:
+                print(f"  {DIM}  {option}{RES}")
+        key = get_key()
+        if key == 'UP' and selected > 0:
+            selected -= 1
+        elif key == 'DOWN' and selected < len(options) - 1:
+            selected += 1
+        elif key == 'ENTER':
+            if selected == 0: freenet_network_menu("STS")
+            elif selected == 1: freenet_network_menu("GTM")
+            elif selected == 2: freenet_network_menu("DITO")
+            elif selected == 3: bug_host_scanner()
+            elif selected == 4: generate_vpn_config()
+            elif selected == 5: ssh_providers()
+            elif selected == 6: return
 
+def freenet_network_menu(network):
+    """Show bughosts and payloads for a specific network"""
+    data = FREENET_BUGBOSTS[network]
+    while True:
+        os.system('clear')
+        banner()
+        print(f"  {Y}{BOLD}{data['name']} - Bug Hosts & Payloads{RES}\n")
+        print(f"  {G}[1]{RES} View Working Bug Hosts")
+        print(f"  {G}[2]{RES} View Payload Templates")
+        print(f"  {G}[3]{RES} Test a Bug Host")
+        print(f"  {G}[4]{RES} Generate Config for HTTP Custom")
+        print(f"  {G}[5]{RES} Copy Payload to Clipboard")
+        print(f"  {G}[0]{RES} Back\n")
+        choice = input(f"  {W}Choice: {RES}").strip()
+        if choice == "1":
+            os.system('clear'); banner()
+            print(f"  {Y}{BOLD}{data['name']} Bug Hosts{RES}\n")
+            for i, host in enumerate(data['hosts']):
+                print(f"  {G}[{i+1:02d}]{RES} {host}")
+            input(f"\n  {DIM}Press ENTER to continue...{RES}")
+        elif choice == "2":
+            os.system('clear'); banner()
+            print(f"  {Y}{BOLD}{data['name']} Payload Templates{RES}\n")
+            for i, payload in enumerate(data['payload_templates']):
+                print(f"  {G}[{i+1}]{RES} {payload[:80]}...")
+            input(f"\n  {DIM}Press ENTER to continue...{RES}")
+        elif choice == "3":
+            os.system('clear'); banner()
+            print(f"  {W}Available Bug Hosts for {data['name']}:{RES}")
+            for i, host in enumerate(data['hosts'][:15]):
+                print(f"  {G}[{i+1:02d}]{RES} {host}")
+            print(f"  {G}[E]{RES} Enter custom host")
+            try:
+                ch = input(f"\n  {W}Select host: {RES}").strip()
+                target = None
+                if ch.upper() == "E":
+                    target = input(f"  {W}Enter host: {RES}").strip()
+                elif ch.isdigit() and 1 <= int(ch) <= 15:
+                    target = data['hosts'][int(ch) - 1]
+                if target:
+                    test_bughost(target)
+            except: pass
+        elif choice == "4":
+            generate_config_for_network(network)
+        elif choice == "5":
+            os.system('clear'); banner()
+            print(f"  {W}Select payload to copy:{RES}")
+            for i, payload in enumerate(data['payload_templates']):
+                print(f"  {G}[{i+1}]{RES} {payload[:60]}...")
+            try:
+                c = int(input(f"\n  {W}Choice: {RES}").strip())
+                if 1 <= c <= len(data['payload_templates']):
+                    os.system(f'echo "{data["payload_templates"][c-1]}" | termux-clipboard-set 2>/dev/null')
+                    print(f"  {G}[OK] Payload copied!{RES}")
+                    time.sleep(1)
+            except: pass
+        elif choice == "0": return
+
+def test_bughost(host):
+    """Test a bughost for connectivity and SNI response"""
+    os.system('clear'); banner()
+    print(f"  {Y}Testing: {host}{RES}\n")
+    spinner("Testing port 443", 1)
+    try:
+        # Test resolution
+        ip = socket.gethostbyname(host)
+        print(f"  {G}[✓]{RES} Resolved: {ip}")
+        # Test TCP
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        if sock.connect_ex((host, 443)) == 0:
+            print(f"  {G}[✓]{RES} Port 443: OPEN")
+        else:
+            print(f"  {R}[✗]{RES} Port 443: CLOSED")
+        sock.close()
+        # Test SNI
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            with socket.create_connection((host, 443), timeout=5) as s:
+                with ctx.wrap_socket(s, server_hostname=host) as ss:
+                    cert = ss.getpeercert()
+                    if cert:
+                        from datetime import datetime
+                        not_after = datetime.strptime(cert.get('notAfter', '20000101000000Z'), "%b %d %H:%M:%S %Y %Z")
+                        subject = dict(x[0] for x in cert.get('subject', []))
+                        cn = subject.get('commonName', 'N/A')
+                        remaining = (not_after - datetime.utcnow()).days
+                        print(f"  {G}[✓]{RES} TLS: VALID | CN: {cn} | Exp: {remaining} days")
+        except Exception as e:
+            print(f"  {Y}[!]{RES} TLS: Partial - {str(e)[:50]}")
+        # Test HTTP
+        try:
+            r = requests.get(f"https://{host}/", timeout=5)
+            print(f"  {G}[✓]{RES} HTTP: {r.status_code} | Server: {r.headers.get('Server', 'N/A')}")
+            cdn_sig = ""
+            if 'cloudflare' in str(r.headers).lower():
+                cdn_sig = "Cloudflare"
+            elif 'gws' in r.headers.get('Server', ''):
+                cdn_sig = "Google"
+            if cdn_sig:
+                print(f"  {G}[✓]{RES} CDN: {cdn_sig} (Good for freenet)")
+        except:
+            print(f"  {R}[✗]{RES} HTTP: No response")
+        # Freenet verdict
+        print(f"\n  {Y}FREENET VERDICT:{RES}")
+        if sock.connect_ex((host, 443)) == 0:
+            print(f"  {G}This host can be used as an SNI bug host.{RES}")
+            print(f"  Use it with HTTP Custom, Injector, or NapsternetV.")
+        else:
+            print(f"  {R}This host is not accessible on port 443.{RES}")
+    except Exception as e:
+        print(f"  {R}[✗] Host unreachable: {e}{RES}")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
+
+def bug_host_scanner():
+    """Scan for potential bughosts on CloudFront/Google IP ranges"""
+    os.system('clear'); banner()
+    print(f"  {Y}{BOLD}BUG HOST SCANNER{RES}\n")
+    print(f"  This scans Google/CloudFront IPs for potential bughosts.")
+    print(f"  {DIM}Method: Reverse IP lookup on known freenet IP ranges{RES}\n")
+    print(f"  {G}[1]{RES} Quick Scan (Test known hosts)")
+    print(f"  {G}[2]{RES} DNS Lookup on Google IPs")
+    print(f"  {G}[0]{RES} Back\n")
+    choice = input(f"  {W}Choice: {RES}").strip()
+    if choice == "1":
+        os.system('clear'); banner()
+        print(f"  {Y}Testing known freenet hosts...{RES}\n")
+        test_hosts = [
+            "connectivitycheck.gstatic.com",
+            "clients3.google.com",
+            "l.google.com",
+            "gstatic.com",
+            "0.freebasics.com",
+            "internet.org",
+            "facebook.com",
+            "cdnjs.cloudflare.com",
+        ]
+        for host in test_hosts:
+            try:
+                ip = socket.gethostbyname(host)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(3)
+                status = f"{G}OPEN{RES}" if sock.connect_ex((host, 443)) == 0 else f"{R}CLOSED{RES}"
+                sock.close()
+                print(f"  [{status}] {host} → {ip}")
+            except:
+                print(f"  [{R}DOWN{RES}] {host}")
+        input(f"\n  {DIM}Press ENTER to continue...{RES}")
+    elif choice == "2":
+        os.system('clear'); banner()
+        print(f"  {Y}DNS Lookup on Google IPs...{RES}\n")
+        test_ips = ["142.250.80.1", "142.250.96.1", "34.117.45.1", "130.211.1.1"]
+        for ip in test_ips:
+            try:
+                host = socket.gethostbyaddr(ip)
+                print(f"  {G}[✓]{RES} {ip} → {host[0]}")
+            except:
+                print(f"  {R}[✗]{RES} {ip} → No PTR record")
+
+        input(f"\n  {DIM}Press ENTER to continue...{RES}")
+
+def generate_config_for_network(network):
+    """Generate a VPN config for a specific network"""
+    data = FREENET_BUGBOSTS[network]
+    os.system('clear'); banner()
+    print(f"  {Y}{BOLD}Generate {data['name']} Config{RES}\n")
+    sni = input(f"  {W}SNI/Bug Host [{data['hosts'][0]}]: {RES}").strip() or data['hosts'][0]
+    ssh_host = input(f"  {W}SSH Host: {RES}").strip()
+    ssh_port = input(f"  {W}SSH Port [443]: {RES}").strip() or "443"
+    ssh_user = input(f"  {W}SSH Username: {RES}").strip()
+    ssh_pass = input(f"  {W}SSH Password: {RES}").strip()
+    print(f"\n  {W}Select payload type:{RES}")
+    for i, pt in enumerate(data['payload_templates']):
+        print(f"  {G}[{i+1}]{RES} {pt[:60]}...")
+    try:
+        pc = int(input(f"\n  {W}Choice [1]: {RES}").strip() or "1")
+        payload = data['payload_templates'][max(0, min(pc-1, len(data['payload_templates'])-1))]
+        payload = payload.replace("[host]", ssh_host).replace("[port]", ssh_port).replace("[sni]", sni)
+    except:
+        payload = data['payload_templates'][0].replace("[host]", ssh_host).replace("[port]", ssh_port).replace("[sni]", sni)
+
+    os.system('clear'); banner()
+    print(f"  {G}{BOLD}CONFIG GENERATED{RES}\n")
+    print(f"  {W}Proxy:{RES}        {sni}:443")
+    print(f"  {W}SNI:{RES}          {sni}")
+    print(f"  {W}SSH Host:{RES}     {ssh_host}:{ssh_port}")
+    print(f"  {W}SSH User:{RES}     {ssh_user}")
+    print(f"  {W}SSH Pass:{RES}     {'*' * len(ssh_pass)}")
+    print(f"  {W}Payload:{RES}")
+    for line in payload.split('\r\n'):
+        print(f"    {DIM}{line}{RES}")
+    print(f"\n  {G}Single-line payload:{RES}")
+    single_line = payload.replace('\r\n', '[crlf]')
+    print(f"  {DIM}{single_line}{RES}")
+    # Save to file
+    save_file = os.path.expanduser(f"~/saekax_{network}_{sni.replace('.','_')}.txt")
+    with open(save_file, 'w') as f:
+        f.write(f"=== SAEKAX {data['name']} CONFIG ===\n")
+        f.write(f"Proxy: {sni}:443\n")
+        f.write(f"SNI: {sni}\n")
+        f.write(f"SSH: {ssh_host}:{ssh_port}\n")
+        f.write(f"User: {ssh_user}\n")
+        f.write(f"Pass: {ssh_pass}\n")
+        f.write(f"Payload: {single_line}\n")
+    print(f"\n  {G}[OK] Saved to: {save_file}{RES}")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
+
+def generate_vpn_config():
+    """Generate a complete VPN configuration"""
+    os.system('clear'); banner()
+    print(f"  {Y}{BOLD}GENERATE VPN CONFIG{RES}\n")
+    print(f"  {G}[1]{RES} STS (Smart/TNT/Sun)")
+    print(f"  {G}[2]{RES} GTM (Globe/TM)")
+    print(f"  {G}[3]{RES} DITO")
+    print(f"  {G}[0]{RES} Back\n")
+    choice = input(f"  {W}Choice: {RES}").strip()
+    if choice in ["1", "2", "3"]:
+        networks = {"1": "STS", "2": "GTM", "3": "DITO"}
+        generate_config_for_network(networks[choice])
+
+def ssh_providers():
+    """Show list of free SSH account providers"""
+    os.system('clear'); banner()
+    print(f"  {Y}{BOLD}FREE SSH ACCOUNT PROVIDERS{RES}\n")
+    print(f"  These sites provide free SSH accounts for VPN tunneling:\n")
+    for i, provider in enumerate(FREENET_SSH_PROVIDERS):
+        print(f"  {G}[{i+1}]{RES} {provider['name']} — {provider['url']}")
+    print(f"\n  {DIM}Create an account on any of these sites.{RES}")
+    print(f"  {DIM}Use port 443 or 22 for freenet configs.{RES}")
+    print(f"  {DIM}Pair with a working bughost + payload.{RES}")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
+    
 # ── CREDITS ─────────────────────────────
 def credits():
     os.system('clear')

@@ -329,6 +329,7 @@ def main_menu(username=""):
         "HTTP TOOLS",
         "CC BIN INFO",
         "FREENET PH METHODS",
+        "ONLINE TEMPNUMBER",
         "TEMPMAIL",
         "CREDITS",
         "END SESSION"
@@ -341,9 +342,10 @@ def main_menu(username=""):
         elif choice == 4: http_tools()
         elif choice == 5: cc_bin_info()
         elif choice == 6: freenet_main()
-        elif choice == 7: tempmail_main()    
-        elif choice == 8: credits()
-        elif choice == 9: end_session()
+        elif choice == 7: sms_ph_main()
+        elif choice == 8: tempmail_main()    
+        elif choice == 9: credits()
+        elif choice == 10: end_session()
 
 # ── SAVE FB ACCOUNT ────────────────────
 def save_fb_menu():
@@ -871,6 +873,159 @@ def ssh_providers():
     print(f"  {DIM}Pair with a working bughost + payload.{RES}")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
+# ── ONLINE SMS PH ──────────────────────────
+SMS_API = "https://smsph.net/api"
+
+def sms_ph_main():
+    """Main entry point for Online SMS Philippines"""
+    options = [
+        "Get Available Numbers",
+        "View Messages for a Number",
+        "Copy Active Number",
+        "Back to Main Menu",
+    ]
+    selected = 0
+    while True:
+        os.system('clear')
+        banner()
+        print(f"  {Y}{BOLD}ONLINE SMS PHILIPPINES{RES}")
+        print(f"  {DIM}Source: smsph.net{RES}\n")
+        for i, option in enumerate(options):
+            if i == selected:
+                print(f"  {G}{BOLD}▸ {option}{RES}")
+            else:
+                print(f"  {DIM}  {option}{RES}")
+        key = get_key()
+        if key == 'UP' and selected > 0:
+            selected -= 1
+        elif key == 'DOWN' and selected < len(options) - 1:
+            selected += 1
+        elif key == 'ENTER':
+            if selected == 0: get_sms_numbers()
+            elif selected == 1: view_sms_messages()
+            elif selected == 2: copy_active_sms_number()
+            elif selected == 3: return
+
+def get_sms_numbers():
+    """Fetch and display available PH numbers"""
+    os.system('clear')
+    banner()
+    spinner("Fetching available numbers", 1.5)
+    try:
+        r = requests.get(f"{SMS_API}/numbers", timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            numbers = data.get('numbers', [])
+            if not numbers:
+                print(f"  {Y}No numbers available right now.{RES}")
+                print(f"  {DIM}Try again in a few minutes.{RES}")
+                input(f"\n  {DIM}Press ENTER to continue...{RES}")
+                return
+
+            print(f"  {G}{len(numbers)} Numbers Available:{RES}\n")
+            print(f"  {W}{'#':4} {'Phone Number':20} {'Status':12}{RES}")
+            print(f"  {DIM}{'─'*40}{RES}")
+            for i, num in enumerate(numbers):
+                phone = num.get('number', 'N/A')
+                status_raw = num.get('status', 0)
+                if status_raw == 1:
+                    status = f"{G}AVAILABLE{RES}"
+                elif status_raw == 2:
+                    status = f"{Y}IN USE{RES}"
+                else:
+                    status = f"{R}EXPIRED{RES}"
+                print(f"  {G}[{i+1:02d}]{RES} {phone:20} {status}")
+            print(f"  {DIM}{'─'*40}{RES}")
+
+            # Save to temp file for later use
+            with open(os.path.expanduser("~/.saekax_sms_numbers.json"), "w") as f:
+                json.dump(numbers, f)
+        else:
+            print(f"  {R}API Error (HTTP {r.status_code}){RES}")
+    except Exception as e:
+        print(f"  {R}Connection error: {e}{RES}")
+    input(f"\n  {DIM}Press ENTER to continue...{RES}")
+
+def view_sms_messages():
+    """View messages for a selected number"""
+    fn = os.path.expanduser("~/.saekax_sms_numbers.json")
+    if not os.path.exists(fn):
+        print(f"  {R}No numbers cached. Use 'Get Available Numbers' first.{RES}")
+        time.sleep(1.5)
+        return
+
+    with open(fn) as f:
+        numbers = json.load(f)
+
+    os.system('clear')
+    banner()
+    print(f"  {Y}SELECT A NUMBER TO VIEW MESSAGES{RES}\n")
+    for i, num in enumerate(numbers):
+        phone = num.get('number', 'N/A')
+        print(f"  {G}[{i+1}]{RES} {phone}")
+    print(f"  {G}[0]{RES} Back")
+
+    try:
+        choice = int(input(f"\n  {W}Choice: {RES}").strip())
+        if choice == 0: return
+        selected = numbers[choice - 1]
+        phone = selected.get('number', '')
+    except:
+        return
+
+    os.system('clear')
+    banner()
+    print(f"  {Y}MESSAGES FOR: {phone}{RES}")
+    print(f"  {DIM}[CTRL+C to stop auto-refresh]{RES}\n")
+
+    try:
+        while True:
+            os.system('clear')
+            banner()
+            print(f"  {Y}MESSAGES FOR: {phone}{RES}\n")
+
+            r = requests.get(f"{SMS_API}/messages/{phone}", timeout=15)
+            if r.status_code == 200:
+                msgs = r.json().get('messages', [])
+                if msgs:
+                    for i, msg in enumerate(msgs):
+                        sender = msg.get('sender', 'Unknown')
+                        body = msg.get('body', 'No content')
+                        time_str = msg.get('time', 'N/A')
+                        print(f"  {G}[{i+1:02d}]{RES} From: {sender}")
+                        print(f"  {DIM}    Time: {time_str}{RES}")
+                        print(f"  {W}    {body[:100]}{RES}")
+                        print(f"  {DIM}{'─'*40}{RES}")
+                else:
+                    print(f"  {DIM}No messages yet. Waiting...{RES}")
+            else:
+                print(f"  {R}Error fetching messages.{RES}")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+
+def copy_active_sms_number():
+    """Copy the first available number to clipboard"""
+    fn = os.path.expanduser("~/.saekax_sms_numbers.json")
+    if not os.path.exists(fn):
+        print(f"  {R}No numbers cached.{RES}")
+        time.sleep(1.5)
+        return
+
+    with open(fn) as f:
+        numbers = json.load(f)
+
+    for num in numbers:
+        if num.get('status') == 1:
+            phone = num['number']
+            os.system(f'echo "{phone}" | termux-clipboard-set 2>/dev/null')
+            print(f"  {G}[OK] Number copied: {phone}{RES}")
+            time.sleep(1.5)
+            return
+
+    print(f"  {R}No available number found.{RES}")
+    time.sleep(1.5)
+    
 # ── TEMP MAIL GENERATOR (FIXED + MULTI-SOURCE) ──
 
 import string

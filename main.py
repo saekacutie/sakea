@@ -338,7 +338,7 @@ def main_menu(username=""):
     ]
     while True:
         choice = arrow_menu(options, username)
-        elif choice == 1: facebook_spam_share()
+        if choice == 1: facebook_spam_share()
         elif choice == 2: facebook_spam_reporter()
         elif choice == 3: save_fb_menu()
         elif choice == 4: http_tools()

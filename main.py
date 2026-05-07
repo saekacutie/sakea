@@ -331,6 +331,7 @@ def main_menu(username=""):
         "FREENET PH METHODS",
         "ONLINE TEMPNUMBER",
         "TEMPMAIL",
+        "UPDATE SAEKAX TOOL"
         "CREDITS",
         "END SESSION"
     ]
@@ -343,9 +344,10 @@ def main_menu(username=""):
         elif choice == 5: cc_bin_info()
         elif choice == 6: freenet_main()
         elif choice == 7: sms_ph_main()
-        elif choice == 8: tempmail_main()    
-        elif choice == 9: credits()
-        elif choice == 10: end_session()
+        elif choice == 8: tempmail_main()
+        elif choice == 9: update_tool()
+        elif choice == 10: credits()
+        elif choice == 11: end_session()
 
 # ── SAVE FB ACCOUNT ────────────────────
 def save_fb_menu():
@@ -1547,6 +1549,55 @@ def credits():
     print(f"{C}Contact: {CREATOR_FB}{RES}".center(w + len(CREATOR_FB) + 9))
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
+# ── UPDATE TOOL ────────────────────────────
+VERSION = "1.0"  # Current version
+REPO_RAW_URL = "https://raw.githubusercontent.com/saekacutie/sakea/main/main.py"
+
+def update_tool():
+    """Download the latest Version from the Source and restart the tool."""
+    os.system('clear')
+    banner()
+    print(f"  {Y}UPDATE TOOL{RES}\n")
+    print(f"  Current version: {VERSION}")
+    print(f"  Checking for updates...")
+
+    spinner("Fetching latest version", 1.5)
+
+    try:
+        # Download the latest main.py
+        r = requests.get(REPO_RAW_URL, timeout=15)
+        if r.status_code == 200:
+            latest_code = r.text
+            # Check if different (simple check: compare file size or a version string)
+            current_file = os.path.abspath(__file__)
+            with open(current_file, 'r') as f:
+                current_code = f.read()
+
+            if latest_code == current_code:
+                print(f"  {G}[OK] Already up-to-date.{RES}")
+                time.sleep(1.5)
+                return
+
+            # Backup current file
+            backup_file = current_file + ".bak"
+            shutil.copy(current_file, backup_file)
+
+            # Write new code
+            with open(current_file, 'w') as f:
+                f.write(latest_code)
+
+            print(f"  {G}[OK] Update downloaded. Restarting...{RES}")
+            time.sleep(1)
+
+            # Restart the tool
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        else:
+            print(f"  {R}Failed to fetch update (HTTP {r.status_code}).{RES}")
+            time.sleep(2)
+    except Exception as e:
+        print(f"  {R}Update error: {e}{RES}")
+        time.sleep(2)
+        
 # ── END SESSION ─────────────────────────
 def end_session():
     colors = [R, G, B, M, C, Y]; frames = ['◜', '◠', '◝', '◞', '◡', '◟']

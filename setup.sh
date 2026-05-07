@@ -23,7 +23,8 @@ get_width() {
 center_text() {
     local text="$1"
     local width=$(get_width)
-    local pad=$(( (width - ${#text}) / 2 ))
+    local clean_text=$(echo -e "$text" | sed 's/\x1b\[[0-9;]*m//g')
+    local pad=$(( (width - ${#clean_text}) / 2 ))
     [ $pad -lt 0 ] && pad=0
     printf "%*s%s\n" $pad "" "$text"
 }
@@ -31,7 +32,7 @@ center_text() {
 clear
 echo ""
 echo ""
-center_text "$(echo -e "${CYAN}${BOLD}SAEKA TOOL${RESET}")"
+center_text "${CYAN}${BOLD}SAEKA TOOL${RESET}"
 echo ""
 
 loading_spinner() {
@@ -42,11 +43,12 @@ loading_spinner() {
     while kill -0 $pid 2>/dev/null; do
         local frame="${frames:$i:1}"
         local text="Installing ${package}..."
+        local clean_text=$(echo -e "$text" | sed 's/\x1b\[[0-9;]*m//g')
         local width=$(get_width)
-        local total=$(( ${#text} + 2 ))
+        local total=$(( ${#clean_text} + 2 ))
         local pad=$(( (width - total) / 2 ))
         [ $pad -lt 0 ] && pad=0
-        printf "\r%*s%s %s" $pad "" "$frame" "$text"
+        printf "\r%*s%s %s" $pad "" "$frame" "$clean_text"
         i=$(( (i + 1) % 6 ))
         sleep 0.1
     done
@@ -73,7 +75,7 @@ if ! grep -q "alias saeka=" $HOME/.bashrc 2>/dev/null; then
 fi
 
 echo ""
-center_text "$(echo -e "${GREEN}${BOLD}✔ All Requirements is now on your Device${RESET}")"
+center_text "${GREEN}${BOLD}✔ All Requirements is now on your Device${RESET}"
 echo ""
-center_text "$(echo -e "${WHITE}Type ${CYAN}${BOLD}\"saeka\"${RESET}${WHITE} to run the tool${RESET}")"
+center_text "${WHITE}Type ${CYAN}${BOLD}\"saeka\"${RESET}${WHITE} to run the tool${RESET}"
 echo ""

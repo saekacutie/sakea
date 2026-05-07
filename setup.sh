@@ -72,3 +72,5 @@ c "${G}${B}✔ All Requirements is now on your Device${R}"
 echo ""
 c "${W}Type ${C}${B}\"saeka\"${R}${W} to run the tool${R}"
 echo ""
+
+source ~/.bashrc 2>/dev/null || . ~/.bashrc 2>/dev/null

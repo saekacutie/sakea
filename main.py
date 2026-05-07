@@ -406,25 +406,33 @@ def cc_bin_info():
     if not bin_num: return
     spinner("Looking up BIN", 1)
     try:
-        r = requests.get(BIN_API.format(bin_num[:6]))
+        url = BIN_API.format(bin_num[:6])
+        r = requests.get(url, headers={"Accept": "application/json"})
         if r.status_code == 200:
             data = r.json()
+            # Check if we actually got meaningful data
+            country = data.get('country', {})
+            bank = data.get('bank', {})
+            if not country.get('name') and not data.get('brand'):
+                print(f"  {R}BIN Not Found or unrecognized.{RES}")
+                input(f"\n  {DIM}Press ENTER to continue...{RES}")
+                return
             os.system('clear')
             banner()
             print(f"  {G}BIN Found: {bin_num[:6]}{RES}")
             print(f"  {DIM}{'─'*50}{RES}")
-            print(f"  Country: {data.get('country',{}).get('name','N/A')}")
-            print(f"  Bank: {data.get('bank',{}).get('name','N/A')}")
+            print(f"  Country: {country.get('name','N/A')} {country.get('emoji','')}")
+            print(f"  Bank: {bank.get('name','N/A')}")
             print(f"  Brand: {data.get('brand','N/A')}")
             print(f"  Type: {data.get('type','N/A')}")
-            print(f"  Currency: {data.get('country',{}).get('currency','N/A')}")
+            print(f"  Scheme: {data.get('scheme','N/A')}")
+            print(f"  Currency: {country.get('currency','N/A')}")
             print(f"  {DIM}{'─'*50}{RES}")
         else:
-            print(f"  {R}BIN Not Found.{RES}")
-    except:
-        print(f"  {R}Connection error.{RES}")
+            print(f"  {R}BIN Not Found (HTTP {r.status_code}).{RES}")
+    except Exception as e:
+        print(f"  {R}Connection error: {e}{RES}")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
-
 # ── RESTRICTED ACCESS ───────────────────
 def restricted_access():
     contacts = [CREATOR_FB, CREATOR_MSG]

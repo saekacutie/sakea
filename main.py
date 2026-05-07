@@ -871,45 +871,90 @@ def ssh_providers():
     print(f"  {DIM}Pair with a working bughost + payload.{RES}")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
-# ── TEMP MAIL GENERATOR ─────────────────────
+# ── TEMP MAIL GENERATOR (FIXED + MULTI-SOURCE) ──
 
-TEMPMAIL_DOMAINS = [
-    "1secmail.com", "1secmail.net", "1secmail.org",
-    "guerrillamail.com", "guerrillamail.net", "guerrillamail.org",
-    "sharklasers.com", "grr.la", "pokemail.net", "spam4.me",
-    "guerrillamail.biz", "guerrillamail.de", "guerrillamail.info",
-    "guerrillamailblock.com", "zipcad.com", "solvemail.info",
-    "mt2015.com", "mt2014.com", "mailsac.com",
-]
+import string
 
 TEMPMAIL_SERVICES = {
-    "1secmail": {
-        "name": "1secmail",
-        "api": "https://www.1secmail.com/api/v1/",
-        "domains": ["1secmail.com", "1secmail.net", "1secmail.org"],
-        "description": "Create disposable email with API access",
-    },
     "guerrillamail": {
         "name": "Guerrilla Mail",
         "api": "https://api.guerrillamail.com/ajax.php",
-        "domains": ["guerrillamail.com", "sharklasers.com", "grr.la", "pokemail.net", "spam4.me"],
-        "description": "Popular disposable email with web interface",
+        "status": "checking",
+        "description": "Popular disposable email",
+    },
+    "1secmail": {
+        "name": "1secmail",
+        "api": "https://www.1secmail.com/api/v1/",
+        "status": "checking",
+        "description": "API-based temp mail",
     },
     "mailtm": {
         "name": "Mail.tm",
         "api": "https://api.mail.tm",
-        "domains": [],
-        "description": "Modern temp mail with GraphQL API",
+        "status": "checking",
+        "description": "Modern GraphQL API",
+    },
+    "tempail": {
+        "name": "Tempail",
+        "api": "https://tempail.com/api",
+        "status": "checking",
+        "description": "Web-based temp mail",
+    },
+    "10minutemail": {
+        "name": "10MinuteMail",
+        "api": "https://10minutemail.com",
+        "status": "checking",
+        "description": "Classic 10-min email",
+    },
+    "maildrop": {
+        "name": "Maildrop",
+        "api": "https://maildrop.cc/api",
+        "status": "checking",
+        "description": "Alias-based inbox",
     },
 }
 
 current_temp_email = None
 current_temp_service = None
-temp_mail_session = {"email": "", "password": "", "token": "", "service": ""}
+temp_mail_session = {"email": "", "password": "", "token": "", "service": "", "login": "", "domain": ""}
+
+def check_service_status(service_key):
+    """Check if a temp mail service is available"""
+    service = TEMPMAIL_SERVICES[service_key]
+    try:
+        if service_key == "guerrillamail":
+            r = requests.get(f"{service['api']}?f=get_email_address&ip=127.0.0.1&agent=Mozilla", timeout=5)
+            if r.status_code == 200 and 'email_addr' in r.json():
+                return "available"
+        elif service_key == "1secmail":
+            r = requests.get(f"{service['api']}?action=getDomainList", timeout=5)
+            if r.status_code == 200:
+                return "available"
+        elif service_key == "mailtm":
+            r = requests.get(f"{service['api']}/domains", timeout=5)
+            if r.status_code == 200:
+                return "available"
+        elif service_key == "10minutemail":
+            r = requests.get("https://10minutemail.com/session/address", timeout=5)
+            if r.status_code == 200:
+                return "available"
+        elif service_key == "maildrop":
+            r = requests.get(f"{service['api']}/inbox/test123", timeout=5)
+            if r.status_code in (200, 404):
+                return "available"
+    except:
+        pass
+    return "down"
+
+def update_all_statuses():
+    """Check and update status for all services"""
+    for key in TEMPMAIL_SERVICES:
+        TEMPMAIL_SERVICES[key]['status'] = check_service_status(key)
 
 def tempmail_main():
     """Main entry point for Temp Mail Generator"""
     global current_temp_email, current_temp_service
+    update_all_statuses()
     options = [
         "Generate New Temp Email",
         "View Live Inbox",
@@ -949,15 +994,18 @@ def tempmail_main():
 def generate_temp_email():
     """Generate a new temp email from selected service"""
     global current_temp_email, current_temp_service, temp_mail_session
+    update_all_statuses()
     os.system('clear')
     banner()
     print(f"  {Y}GENERATE TEMP EMAIL{RES}\n")
 
-    # Select service
     services = list(TEMPMAIL_SERVICES.keys())
     print(f"  {W}Select service:{RES}")
     for i, svc in enumerate(services):
-        print(f"  {G}[{i+1}]{RES} {TEMPMAIL_SERVICES[svc]['name']}")
+        status = TEMPMAIL_SERVICES[svc]['status']
+        status_color = G if status == "available" else (Y if status == "checking" else R)
+        status_text = "AVAILABLE" if status == "available" else ("CHECKING" if status == "checking" else "DOWN")
+        print(f"  {G}[{i+1}]{RES} {TEMPMAIL_SERVICES[svc]['name']} [{status_color}{status_text}{RES}]")
     print(f"  {G}[0]{RES} Back")
 
     try:
@@ -965,6 +1013,10 @@ def generate_temp_email():
         if choice == 0: return
         service_key = services[choice - 1]
         service = TEMPMAIL_SERVICES[service_key]
+        if service['status'] == "down":
+            print(f"  {R}This service is currently unavailable.{RES}")
+            time.sleep(1.5)
+            return
     except:
         return
 
@@ -975,8 +1027,9 @@ def generate_temp_email():
             r = requests.get(f"{service['api']}?action=genRandomMailbox&count=1", timeout=10)
             if r.status_code == 200:
                 current_temp_email = r.json()[0]
+                login, domain = current_temp_email.split('@')
                 current_temp_service = service_key
-                temp_mail_session = {"email": current_temp_email, "service": service_key}
+                temp_mail_session = {"email": current_temp_email, "service": service_key, "login": login, "domain": domain}
                 print(f"\n  {G}[OK] Email generated!{RES}")
                 print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
             else:
@@ -986,7 +1039,7 @@ def generate_temp_email():
 
     elif service_key == "guerrillamail":
         try:
-            r = requests.get(f"{service['api']}?f=get_email_address&ip=127.0.0.1&agent=Mozilla_foo_bar", timeout=10)
+            r = requests.get(f"{service['api']}?f=get_email_address&ip=127.0.0.1&agent=Mozilla", timeout=10)
             if r.status_code == 200:
                 data = r.json()
                 current_temp_email = data.get('email_addr', '')
@@ -1022,6 +1075,40 @@ def generate_temp_email():
         except:
             print(f"  {R}Connection error.{RES}")
 
+    elif service_key == "tempail":
+        try:
+            r = requests.get(f"{service['api']}/mailbox", timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                current_temp_email = data.get('mailbox', '')
+                current_temp_service = service_key
+                temp_mail_session = {"email": current_temp_email, "service": service_key}
+                print(f"\n  {G}[OK] Email generated!{RES}")
+                print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
+        except:
+            print(f"  {R}Connection error.{RES}")
+
+    elif service_key == "10minutemail":
+        try:
+            r = requests.get("https://10minutemail.com/session/address", timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                current_temp_email = data.get('address', '')
+                current_temp_service = service_key
+                temp_mail_session = {"email": current_temp_email, "service": service_key}
+                print(f"\n  {G}[OK] Email generated!{RES}")
+                print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
+        except:
+            print(f"  {R}Connection error.{RES}")
+
+    elif service_key == "maildrop":
+        local_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        current_temp_email = f"{local_part}@maildrop.cc"
+        current_temp_service = service_key
+        temp_mail_session = {"email": current_temp_email, "service": service_key, "login": local_part}
+        print(f"\n  {G}[OK] Email generated!{RES}")
+        print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
+
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
 def view_live_inbox():
@@ -1042,7 +1129,10 @@ def view_live_inbox():
     messages = []
 
     if service == "1secmail":
-        login, domain = current_temp_email.split('@')
+        login = temp_mail_session.get('login', '')
+        domain = temp_mail_session.get('domain', '')
+        if not login:
+            login, domain = current_temp_email.split('@')
         try:
             r = requests.get(f"https://www.1secmail.com/api/v1/?action=getMessages&login={login}&domain={domain}", timeout=10)
             if r.status_code == 200:
@@ -1057,13 +1147,7 @@ def view_live_inbox():
             if r.status_code == 200:
                 data = r.json()
                 if 'list' in data:
-                    for msg in data['list']:
-                        messages.append({
-                            "id": msg.get('mail_id', ''),
-                            "from": msg.get('mail_from', 'Unknown'),
-                            "subject": msg.get('mail_subject', 'No Subject'),
-                            "date": msg.get('mail_date', ''),
-                        })
+                    messages = data['list']
         except:
             print(f"  {R}Connection error.{RES}")
 
@@ -1080,26 +1164,45 @@ def view_live_inbox():
                     for msg in msg_r.json()['hydra:member']:
                         messages.append({
                             "id": msg.get('id', ''),
-                            "from": msg.get('from', {}).get('address', 'Unknown'),
-                            "subject": msg.get('subject', 'No Subject'),
-                            "date": msg.get('createdAt', ''),
+                            "mail_from": msg.get('from', {}).get('address', 'Unknown'),
+                            "mail_subject": msg.get('subject', 'No Subject'),
+                            "mail_date": msg.get('createdAt', ''),
                         })
+        except:
+            print(f"  {R}Connection error.{RES}")
+
+    elif service == "maildrop":
+        login = temp_mail_session.get('login', '')
+        try:
+            r = requests.get(f"https://maildrop.cc/api/inbox/{login}", timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                for msg in data.get('messages', []):
+                    messages.append({
+                        "id": msg.get('id', ''),
+                        "mail_from": msg.get('from', 'Unknown'),
+                        "mail_subject": msg.get('subject', 'No Subject'),
+                        "mail_date": msg.get('date', ''),
+                    })
         except:
             print(f"  {R}Connection error.{RES}")
 
     if messages:
         print(f"  {G}{len(messages)} emails found:{RES}\n")
         for i, msg in enumerate(messages):
-            print(f"  {G}[{i+1}]{RES} From: {msg.get('from', 'Unknown')}")
-            print(f"  {DIM}    Subject: {msg.get('subject', 'No Subject')[:60]}{RES}")
-            print(f"  {DIM}    Date: {msg.get('date', 'N/A')}{RES}\n")
+            msg_id = msg.get('id', msg.get('mail_id', str(i)))
+            sender = msg.get('from', msg.get('mail_from', 'Unknown'))
+            subject = msg.get('subject', msg.get('mail_subject', 'No Subject'))
+            date = msg.get('date', msg.get('mail_date', 'N/A'))
+            print(f"  {G}[{msg_id}]{RES} From: {sender}")
+            print(f"  {DIM}    Subject: {subject[:60]}{RES}")
+            print(f"  {DIM}    Date: {date}{RES}\n")
     else:
         print(f"  {DIM}Inbox is empty.{RES}")
 
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
 def refresh_inbox():
-    """Refresh the inbox - same as view"""
     view_live_inbox()
 
 def view_specific_email():
@@ -1124,7 +1227,8 @@ def view_specific_email():
     sender = "Unknown"
 
     if service == "1secmail":
-        login, domain = current_temp_email.split('@')
+        login = temp_mail_session.get('login', '')
+        domain = temp_mail_session.get('domain', '')
         try:
             r = requests.get(f"https://www.1secmail.com/api/v1/?action=readMessage&login={login}&domain={domain}&id={msg_id}", timeout=10)
             if r.status_code == 200:
@@ -1158,7 +1262,7 @@ def view_specific_email():
                 msg_r = requests.get(f"https://api.mail.tm/messages/{msg_id}", headers=headers, timeout=10)
                 if msg_r.status_code == 200:
                     data = msg_r.json()
-                    body = data.get('text', data.get('html', [data.get('text', 'No content')])[0] if isinstance(data.get('html'), list) else data.get('html', 'No content'))
+                    body = data.get('text', data.get('html', [''])[0] if isinstance(data.get('html'), list) else data.get('html', 'No content'))
                     subject = data.get('subject', 'No Subject')
                     sender = data.get('from', {}).get('address', 'Unknown')
         except:
@@ -1167,12 +1271,11 @@ def view_specific_email():
     print(f"\n  {G}Subject: {subject}{RES}")
     print(f"  {G}From: {sender}{RES}")
     print(f"  {G}{'─'*50}{RES}")
-    print(f"  {W}{body[:2000]}{RES}")
+    print(f"  {W}{str(body)[:2000]}{RES}")
     print(f"  {G}{'─'*50}{RES}")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
 def copy_tempmail():
-    """Copy current temp email to clipboard"""
     global current_temp_email
     if not current_temp_email:
         print(f"  {R}No active temp email.{RES}")
@@ -1184,7 +1287,6 @@ def copy_tempmail():
     time.sleep(1.5)
 
 def change_tempmail_service():
-    """Change the temp mail service"""
     global current_temp_email, current_temp_service
     current_temp_email = None
     current_temp_service = None

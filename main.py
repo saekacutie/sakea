@@ -1026,42 +1026,30 @@ def ssh_providers():
     print(f"  {DIM}Pair with a working bughost + payload.{RES}")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
-# ── TEMP SMS / ONLINE SMS PH (MULTI-SOURCE, FULLY WORKING, NO ERRORS) ──
+# ── TEMP SMS / ONLINE SMS PH (COMPLETE REBUILD, FIXED) ──
 
-import string, threading, select as sel
+import string, select as sel
 
 SMS_SERVICES = {
     "smsonline": {
         "name": "SMS-Online.co",
-        "type": "free_public",
         "status": "checking",
         "desc": "Public phone numbers, no login needed.",
     },
-    "onlinereceivesms": {
-        "name": "Online-Receive-SMS",
-        "type": "free_api",
-        "api_base": "https://api.online-receive-sms.com",
-        "token": "g7UqlvemG4xQ56FOK9HeNprNmcJ9Js8f",
-        "status": "checking",
-        "desc": "Free API with built-in token.",
-    },
-    "tempnumber": {
-        "name": "Temp-Number.com",
-        "type": "free_public",
-        "status": "checking",
-        "desc": "Public temp numbers, no registration.",
-    },
     "receive_sms_online": {
         "name": "Receive-SMS-Online.cc",
-        "type": "free_public",
         "status": "checking",
         "desc": "Web-based SMS receiver.",
     },
     "freephonenum": {
         "name": "FreePhoneNum.com",
-        "type": "free_public",
         "status": "checking",
         "desc": "Simple temporary number service.",
+    },
+    "tempnumber": {
+        "name": "Temp-Number.com",
+        "status": "checking",
+        "desc": "Public temp numbers, no registration.",
     },
 }
 
@@ -1070,49 +1058,14 @@ current_sms_service = None
 sms_session = {}
 
 def update_sms_statuses():
-    """Check availability of each SMS service."""
-    # sms-online.co
-    try:
-        r = requests.get("https://sms-online.co/", timeout=8)
-        SMS_SERVICES["smsonline"]["status"] = "available" if r.status_code == 200 else "down"
-    except:
-        SMS_SERVICES["smsonline"]["status"] = "down"
-
-    # online-receive-sms.com
-    try:
-        token = SMS_SERVICES['onlinereceivesms']['token']
-        r = requests.post(
-            "https://api.online-receive-sms.com/countries",
-            data={"token_auth": f"token{token}token"},
-            timeout=8
-        )
-        SMS_SERVICES["onlinereceivesms"]["status"] = "available" if r.status_code == 200 else "down"
-    except:
-        SMS_SERVICES["onlinereceivesms"]["status"] = "down"
-
-    # temp-number.com
-    try:
-        r = requests.get("https://temp-number.com/", timeout=8)
-        SMS_SERVICES["tempnumber"]["status"] = "available" if r.status_code == 200 else "down"
-    except:
-        SMS_SERVICES["tempnumber"]["status"] = "down"
-
-    # receive-sms-online.cc
-    try:
-        r = requests.get("https://receive-sms-online.cc/", timeout=8)
-        SMS_SERVICES["receive_sms_online"]["status"] = "available" if r.status_code == 200 else "down"
-    except:
-        SMS_SERVICES["receive_sms_online"]["status"] = "down"
-
-    # freephonenum.com
-    try:
-        r = requests.get("https://freephonenum.com/", timeout=8)
-        SMS_SERVICES["freephonenum"]["status"] = "available" if r.status_code == 200 else "down"
-    except:
-        SMS_SERVICES["freephonenum"]["status"] = "down"
+    for key in SMS_SERVICES:
+        try:
+            r = requests.get(f"https://{key.replace('_','-') if key != 'smsonline' else 'sms-online'}.{'co' if key == 'smsonline' else 'cc' if key == 'receive_sms_online' else 'com'}/", timeout=8)
+            SMS_SERVICES[key]["status"] = "available" if r.status_code == 200 else "down"
+        except:
+            SMS_SERVICES[key]["status"] = "down"
 
 def sms_ph_main():
-    """Main menu for TEMP SMS."""
     update_sms_statuses()
     options = [
         "Get a Temporary Number",
@@ -1144,328 +1097,128 @@ def sms_ph_main():
             elif selected == 3: change_sms_service()
             elif selected == 4: return
 
+def parse_phone_numbers(html, patterns=None):
+    """Extract phone numbers from HTML using multiple fallback methods."""
+    if patterns is None:
+        patterns = [
+            r'/receive-sms-online/(\+?\d+)',
+            r'/number/(\+?\d+)',
+            r'/phone/(\+?\d+)',
+            r'/numbers/[^/]+/(\+?\d+)',
+        ]
+    soup = BeautifulSoup(html, 'html.parser')
+    numbers = []
+    # Method 1: look in links
+    for a in soup.find_all('a', href=True):
+        for pat in patterns:
+            m = re.search(pat, a['href'])
+            if m:
+                numbers.append(m.group(1))
+    # Method 2: look in visible text
+    if not numbers:
+        for tag in soup.find_all(text=True):
+            text = tag.strip()
+            if re.fullmatch(r'\+?\d{7,15}', text) and text not in numbers:
+                numbers.append(text)
+    # Method 3: look in table cells
+    if not numbers:
+        for row in soup.find_all('tr'):
+            for cell in row.find_all('td'):
+                text = cell.get_text(strip=True)
+                if re.fullmatch(r'\+?\d{7,15}', text) and text not in numbers:
+                    numbers.append(text)
+    return numbers
+
 def get_temp_number():
-    """Generate a temporary phone number from the selected service."""
     global current_sms_number, current_sms_service, sms_session
     update_sms_statuses()
-
     os.system('clear'); banner()
     print(f"  {Y}GET TEMPORARY NUMBER{RES}\n")
-
     services = list(SMS_SERVICES.keys())
     print(f"  {W}Select service:{RES}")
-    available_count = 0
     for i, svc in enumerate(services):
         s = SMS_SERVICES[svc]['status']
         color = G if s == "available" else (Y if s == "checking" else R)
         print(f"  {G}[{i+1}]{RES} {SMS_SERVICES[svc]['name']} [{color}{s.upper()}{RES}]")
         print(f"  {DIM}    {SMS_SERVICES[svc]['desc']}{RES}")
-        if s == "available":
-            available_count += 1
     print(f"  {G}[0]{RES} Back")
-    
-    if available_count == 0:
-        print(f"\n  {R}No services are currently available. Try again later.{RES}")
-        time.sleep(2)
-        return
-
     try:
         choice = int(input(f"\n  {W}Choice: {RES}").strip())
         if choice == 0: return
         svc_key = services[choice-1]
     except: return
 
-    if SMS_SERVICES[svc_key]['status'] == 'down':
-        print(f"  {R}Service is currently unavailable.{RES}")
-        time.sleep(1.5); return
-
     spinner("Fetching number", 1.5)
-    number_found = False
-
-    # ── sms-online.co ──
-if svc_key == "smsonline":
+    urls = {
+        "smsonline": "https://sms-online.co/",
+        "receive_sms_online": "https://receive-sms-online.cc/",
+        "freephonenum": "https://freephonenum.com/",
+        "tempnumber": "https://temp-number.com/numbers/united-states",
+    }
     try:
-        r = requests.get("https://sms-online.co/", timeout=15)
+        r = requests.get(urls[svc_key], timeout=15)
         if r.status_code == 200:
-            soup = BeautifulSoup(r.text, 'html.parser')
-            numbers = []
-            for a in soup.find_all('a', href=True):
-                m = re.search(r'/receive-sms-online/(\+?\d+)', a['href'])
-                if m:
-                    numbers.append(m.group(1))
-            if not numbers:
-                for tag in soup.find_all(text=True):
-                    text = tag.strip()
-                    if re.fullmatch(r'\+?\d{7,15}', text):
-                        numbers.append(text)
+            numbers = parse_phone_numbers(r.text)
             if numbers:
                 current_sms_number = numbers[0]
-                number_found = True
-    except Exception as e:
-        print(f"  {R}Error: {e}{RES}")
-
-            # 1. Links with /receive-sms-online/...
-            for a in soup.find_all('a', href=True):
-                m = re.search(r'/receive-sms-online/(\+?\d+)', a['href'])
-                if m:
-                    numbers.append(m.group(1))
-
-            # 2. Any element whose visible text is exactly a phone number
-            if not numbers:
-                for tag in soup.find_all(text=True):
-                    text = tag.strip()
-                    if re.fullmatch(r'\+?\d{7,15}', text):
-                        numbers.append(text)
-
-            # 3. Extract from table rows (fallback for message pages)
-            if not numbers:
-                for row in soup.find_all('tr'):
-                    cells = row.find_all('td')
-                    for cell in cells:
-                        text = cell.get_text(strip=True)
-                        if re.fullmatch(r'\+?\d{7,15}', text) and text not in numbers:
-                            numbers.append(text)
-
-            if numbers:
-                current_sms_number = numbers[0]
-                number_found = True
+                current_sms_service = svc_key
+                sms_session = {"number": current_sms_number, "service": svc_key}
+                print(f"\n  {G}[OK] Number: {C}{BOLD}{current_sms_number}{RES}")
             else:
-                print(f"  {R}No numbers found on page.{RES}")
+                print(f"\n  {R}No numbers found on the page. The service may be empty.{RES}")
+        else:
+            print(f"\n  {R}Site returned HTTP {r.status_code}.{RES}")
     except Exception as e:
-        print(f"  {R}Error: {e}{RES}")
-        
-    # ── online-receive-sms.com API ──
-    elif svc_key == "onlinereceivesms":
-        try:
-            token = SMS_SERVICES[svc_key]['token']
-            data = {"token_auth": f"token{token}token"}
-            r = requests.post(
-                f"{SMS_SERVICES[svc_key]['api_base']}/numbers/random",
-                data=data, timeout=15
-            )
-            if r.status_code == 200:
-                resp = r.json()
-                if 'number' in resp:
-                    current_sms_number = str(resp['number'])
-                    number_found = True
-                elif 'phone' in resp:
-                    current_sms_number = str(resp['phone'])
-                    number_found = True
-                else:
-                    # Fallback: try country list
-                    r2 = requests.post(
-                        f"{SMS_SERVICES[svc_key]['api_base']}/numbers/5",
-                        data=data, timeout=10
-                    )
-                    if r2.status_code == 200:
-                        nums = r2.json()
-                        if isinstance(nums, list) and len(nums) > 0:
-                            current_sms_number = str(nums[0].get('number', nums[0]))
-                            number_found = True
-        except Exception as e:
-            print(f"  {R}Error: {e}{RES}")
-
-    # ── temp-number.com ──
-    elif svc_key == "tempnumber":
-        try:
-            r = requests.get("https://temp-number.com/numbers/united-states", timeout=15)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, 'html.parser')
-                for a in soup.find_all('a', href=re.compile(r'/numbers/united-states/\d+')):
-                    txt = a.get_text(strip=True)
-                    if txt and re.match(r'^\+?\d+', txt):
-                        current_sms_number = txt
-                        number_found = True
-                        break
-        except Exception as e:
-            print(f"  {R}Error: {e}{RES}")
-
-    # ── receive-sms-online.cc ──
-    elif svc_key == "receive_sms_online":
-        try:
-            r = requests.get("https://receive-sms-online.cc/", timeout=15)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, 'html.parser')
-                numbers = []
-                for a in soup.find_all('a', href=True):
-                    m = re.search(r'/number/(\+?\d+)', a.get('href', ''))
-                    if m: numbers.append(m.group(1))
-                if not numbers:
-                    for t in soup.find_all(['div', 'span']):
-                        txt = t.get_text(strip=True)
-                        if re.match(r'^\+?\d{7,15}$', txt): numbers.append(txt)
-                if numbers:
-                    current_sms_number = numbers[0]
-                    number_found = True
-        except Exception as e:
-            print(f"  {R}Error: {e}{RES}")
-
-    # ── freephonenum.com ──
-    elif svc_key == "freephonenum":
-    try:
-        r = requests.get("https://freephonenum.com/", timeout=15)
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, 'html.parser')
-            numbers = []
-
-            # 1. Look for links like /phone/...
-            for a in soup.find_all('a', href=True):
-                m = re.search(r'/phone/(\+?\d+)', a['href'])
-                if m:
-                    numbers.append(m.group(1))
-
-            # 2. Look for any text that is a complete phone number
-            if not numbers:
-                for tag in soup.find_all(text=True):
-                    text = tag.strip()
-                    if re.fullmatch(r'\+?\d{7,15}', text):
-                        numbers.append(text)
-
-            # 3. Search inside divs with specific class (if known)
-            if not numbers:
-                for div in soup.find_all('div', class_=re.compile(r'number|phone')):
-                    text = div.get_text(strip=True)
-                    match = re.search(r'(\+?\d{7,15})', text)
-                    if match:
-                        numbers.append(match.group(1))
-
-            if numbers:
-                current_sms_number = numbers[0]
-                number_found = True
-            else:
-                print(f"  {R}No numbers found on page.{RES}")
-    except Exception as e:
-        print(f"  {R}Error: {e}{RES}")
-
-    if number_found and current_sms_number:
-        current_sms_service = svc_key
-        sms_session = {"number": current_sms_number, "service": svc_key}
-        print(f"\n  {G}[OK] Number: {C}{BOLD}{current_sms_number}{RES}")
-    else:
-        print(f"\n  {R}Could not get a number. The service may be empty.{RES}")
-
+        print(f"\n  {R}Connection error: {e}{RES}")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
 def view_sms_inbox():
-    """Poll the selected service for incoming SMS messages."""
     global current_sms_number, sms_session
     if not current_sms_number:
         print(f"  {R}No active number. Get one first.{RES}")
         time.sleep(1.5); return
-
     svc_key = sms_session.get('service', current_sms_service)
     print(f"  {Y}Live Polling for {current_sms_number}{RES}")
     print(f"  {DIM}Refreshing every 3s. Press ENTER to stop.{RES}")
-
     start = time.time()
     while True:
         os.system('clear'); banner()
         print(f"  {Y}MESSAGES for {current_sms_number}{RES}")
         print(f"  {DIM}Polling every 3s | Elapsed: {int(time.time()-start)}s | Press ENTER to stop{RES}\n")
-
         messages = []
-
-        # ── sms-online.co ──
-        if svc_key == "smsonline":
-            try:
-                r = requests.get(f"https://sms-online.co/receive-sms-online/{current_sms_number}", timeout=10)
-                if r.status_code == 200:
-                    soup = BeautifulSoup(r.text, 'html.parser')
-                    for row in soup.find_all('tr'):
-                        cols = row.find_all('td')
-                        if len(cols) >= 4:
-                            sender = cols[0].get_text(strip=True)
-                            body = cols[2].get_text(strip=True)
-                            tm = cols[3].get_text(strip=True) if len(cols) > 3 else ""
-                            if body and body not in [m.get('body','') for m in messages]:
-                                messages.append({"from": sender, "body": body, "time": tm})
-                    if not messages:
-                        for div in soup.find_all('div', class_=re.compile(r'message|msg')):
-                            text = div.get_text(strip=True)
-                            if text and len(text) > 5:
-                                messages.append({"from": "SMS", "body": text[:200], "time": ""})
-            except: pass
-
-        # ── online-receive-sms.com API ──
-        elif svc_key == "onlinereceivesms":
-            try:
-                token = SMS_SERVICES[svc_key]['token']
-                data = {"token_auth": f"token{token}token"}
-                r = requests.post(
-                    f"{SMS_SERVICES[svc_key]['api_base']}/messages/{current_sms_number}/50",
-                    data=data, timeout=10
-                )
-                if r.status_code == 200:
-                    resp = r.json()
-                    if isinstance(resp, list): messages = resp
-                    elif 'messages' in resp: messages = resp['messages']
-            except: pass
-
-        # ── temp-number.com ──
-        elif svc_key == "tempnumber":
-            try:
-                clean = current_sms_number.replace('+', '')
-                r = requests.get(f"https://temp-number.com/numbers/united-states/{clean}", timeout=10)
-                if r.status_code == 200:
-                    soup = BeautifulSoup(r.text, 'html.parser')
-                    for div in soup.find_all('div', class_='message'):
-                        s_el = div.find('span', class_='sender')
-                        b_el = div.find('span', class_='body')
-                        t_el = div.find('span', class_='time')
-                        if b_el:
-                            messages.append({
-                                "from": s_el.get_text(strip=True) if s_el else "Unknown",
-                                "body": b_el.get_text(strip=True),
-                                "time": t_el.get_text(strip=True) if t_el else ""
-                            })
-            except: pass
-
-        # ── receive-sms-online.cc ──
-        elif svc_key == "receive_sms_online":
-            try:
-                clean = current_sms_number.replace('+', '')
-                r = requests.get(f"https://receive-sms-online.cc/number/{clean}/", timeout=10)
-                if r.status_code == 200:
-                    soup = BeautifulSoup(r.text, 'html.parser')
-                    for row in soup.find_all('tr'):
-                        cols = row.find_all('td')
-                        if len(cols) >= 3:
-                            sender = cols[0].get_text(strip=True)
-                            body = cols[1].get_text(strip=True)
-                            tm = cols[2].get_text(strip=True) if len(cols) > 2 else ""
-                            if body:
-                                messages.append({"from": sender, "body": body, "time": tm})
-            except: pass
-
-        # ── freephonenum.com ──
-        elif svc_key == "freephonenum":
-            try:
-                clean = current_sms_number.replace('+', '')
-                r = requests.get(f"https://freephonenum.com/phone/{clean}/", timeout=10)
-                if r.status_code == 200:
-                    soup = BeautifulSoup(r.text, 'html.parser')
-                    for row in soup.find_all('tr'):
-                        cols = row.find_all('td')
-                        if len(cols) >= 3:
-                            messages.append({
-                                "from": cols[0].get_text(strip=True),
-                                "body": cols[1].get_text(strip=True),
-                                "time": cols[2].get_text(strip=True) if len(cols) > 2 else ""
-                            })
-            except: pass
-
+        try:
+            clean = current_sms_number.replace('+', '')
+            url_templates = {
+                "smsonline": f"https://sms-online.co/receive-sms-online/{current_sms_number}",
+                "receive_sms_online": f"https://receive-sms-online.cc/number/{clean}/",
+                "freephonenum": f"https://freephonenum.com/phone/{clean}/",
+                "tempnumber": f"https://temp-number.com/numbers/united-states/{clean}",
+            }
+            r = requests.get(url_templates.get(svc_key, ''), timeout=10)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, 'html.parser')
+                for row in soup.find_all('tr'):
+                    cols = row.find_all('td')
+                    if len(cols) >= 3:
+                        messages.append({
+                            "from": cols[0].get_text(strip=True),
+                            "body": cols[1].get_text(strip=True) if len(cols) > 1 else cols[2].get_text(strip=True),
+                            "time": cols[-1].get_text(strip=True)
+                        })
+                if not messages:
+                    for div in soup.find_all('div', class_=re.compile(r'message|msg|sms')):
+                        text = div.get_text(strip=True)
+                        if text and len(text) > 5:
+                            messages.append({"from": "SMS", "body": text[:200], "time": ""})
+        except: pass
         if messages:
             for i, msg in enumerate(messages):
-                sender = msg.get('from', msg.get('sender', 'Unknown'))
-                body = msg.get('body', msg.get('message', msg.get('text', 'No content')))
-                tm = msg.get('time', msg.get('date', msg.get('createdAt', '')))
-                print(f"  {G}[{i+1:02d}]{RES} {sender}")
-                print(f"  {W}    {body[:100]}{RES}")
-                if tm: print(f"  {DIM}    {tm}{RES}")
+                print(f"  {G}[{i+1:02d}]{RES} {msg.get('from','Unknown')}")
+                print(f"  {W}    {msg.get('body','')[:100]}{RES}")
+                if msg.get('time'): print(f"  {DIM}    {msg['time']}{RES}")
                 print()
         else:
             print(f"  {DIM}No messages yet. Send SMS to: {current_sms_number}{RES}")
-
         sys.stdout.flush()
         time.sleep(3)
         if sel.select([sys.stdin], [], [], 0)[0]:
@@ -1473,23 +1226,18 @@ def view_sms_inbox():
             break
 
 def copy_sms_number():
-    """Copy the active SMS number to the clipboard."""
     global current_sms_number
     if not current_sms_number:
-        print(f"  {R}No active number.{RES}")
-        time.sleep(1.5); return
+        print(f"  {R}No active number.{RES}"); time.sleep(1.5); return
     os.system(f'echo "{current_sms_number}" | termux-clipboard-set 2>/dev/null')
-    print(f"  {G}[OK] Copied: {current_sms_number}{RES}")
-    time.sleep(1.5)
+    print(f"  {G}[OK] Copied: {current_sms_number}{RES}"); time.sleep(1.5)
 
 def change_sms_service():
-    """Reset the active number so a new one can be generated."""
     global current_sms_number, current_sms_service, sms_session
     current_sms_number = None
     current_sms_service = None
     sms_session = {}
-    print(f"  {G}[OK] Service reset.{RES}")
-    time.sleep(1)
+    print(f"  {G}[OK] Service reset.{RES}"); time.sleep(1)
     
 # ── SEND SMS PH (MULTI-SOURCE) ─────────────
 SMS_SEND_SOURCES = {

@@ -234,7 +234,7 @@ def loading_screen():
             importlib.import_module(mod)
         except ImportError:
             missing.append(mod)
-    duration = 60 if missing else 10
+    duration = 40 if missing else 10
 
     # ── Step 2: install missing packages synchronously ──
     #    (avoids background processes & flashing)
@@ -359,56 +359,121 @@ def signup():
     os.system('clear')
     banner()
     email = input(f"  {W}Email: {RES}").strip()
-    if not email: return
+    if not email:
+        return
+
     password = input(f"  {W}Password: {RES}").strip()
     if len(password) < 6:
+        os.system('clear')
+        banner()
         print(f"  {R}Password must be at least 6 characters.{RES}")
-        time.sleep(1.5); return
+        time.sleep(1.5)
+        return
+
     if not register_user(email, password):
+        os.system('clear')
+        banner()
         print(f"  {R}Email already registered.{RES}")
-        time.sleep(1.5); return
+        time.sleep(1.5)
+        return
+
     code = str(random.randint(100000, 999999))
     stop_event = threading.Event()
     t = threading.Thread(target=lambda: process_spinner("Sending verification code to your Gmail account...", stop_event))
     t.start()
     sent = send_verification_code(email, code)
-    stop_event.set(); t.join()
-    if sent:
-        os.system('clear'); banner()
-        print(f"  {W}Email: {email}{RES}")
-        print(f"  {W}Password: {'*' * len(password)}{RES}")
-        print(f"  {G}✓ Verification code sent to {email}{RES}")
+    stop_event.set()
+    t.join()
+
+    if not sent:
+        os.system('clear')
+        banner()
+        print(f"  {R}Failed to send email. Check your Gmail SMTP settings.{RES}")
         time.sleep(2)
-        os.system('clear'); banner()
+        return
+
+    os.system('clear')
+    banner()
+    print(f"  {W}Email: {email}{RES}")
+    print(f"  {W}Password: {'*' * len(password)}{RES}")
+    print(f"  {G}✓ Verification code sent to {email}{RES}")
+    time.sleep(2)
+
+    # Retry loop for correct code
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        os.system('clear')
+        banner()
         print(f"  {W}Email: {email}{RES}")
         print(f"  {W}Password: {'*' * len(password)}{RES}")
+        if attempt > 0:
+            print(f"  {Y}Incorrect code. {max_attempts - attempt} attempts remaining.{RES}")
         user_code = input(f"  {W}Enter code: {RES}").strip()
+
         if user_code == code:
             set_verified(email)
             centered_spinner("Verification is in Process. Please do not Close this Terminal.", 10)
             check_animation("VERIFICATION SUCCESSFUL!", 2)
             main_menu(email)
-        else:
-            print(f"  {R}Incorrect code.{RES}"); time.sleep(1.5)
-    else:
-        print(f"  {R}Failed to send email. Check your Gmail SMTP settings.{RES}"); time.sleep(2)
+            return
 
-# ── LOGIN ──────────────────────────────────
+        if user_code.lower() == 'resend':
+            code = str(random.randint(100000, 999999))
+            stop_event = threading.Event()
+            t = threading.Thread(target=lambda: process_spinner("Resending code...", stop_event))
+            t.start()
+            sent = send_verification_code(email, code)
+            stop_event.set()
+            t.join()
+            if sent:
+                print(f"  {G}✓ New code sent to {email}{RES}")
+                time.sleep(1)
+            else:
+                print(f"  {R}Failed to resend code.{RES}")
+                time.sleep(1)
+            continue
+
+    os.system('clear')
+    banner()
+    print(f"  {R}Too many incorrect attempts. Please try again later.{RES}")
+    time.sleep(2)
+
+
 def login():
     os.system('clear')
     banner()
     email = input(f"  {W}Email: {RES}").strip()
-    password = input(f"  {W}Password: {RES}").strip()
-    stop_event = threading.Event()
-    t = threading.Thread(target=lambda: process_spinner("CHECKING IF ACCOUNT IS ACTIVE...", stop_event))
-    t.start()
-    valid = verify_user(email, password)
-    stop_event.set(); t.join()
-    if valid:
-        check_animation("VERIFICATION SUCCESSFUL!", 2)
-        main_menu(email)
-    else:
-        print(f"  {R}Account not found or not verified.{RES}"); time.sleep(1.5)
+    if not email:
+        return
+
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        if attempt > 0:
+            os.system('clear')
+            banner()
+            print(f"  {W}Email: {email}{RES}")
+            print(f"  {Y}Incorrect password. {max_attempts - attempt} attempts remaining.{RES}")
+        
+        password = input(f"  {W}Password: {RES}").strip()
+        if not password:
+            continue
+
+        stop_event = threading.Event()
+        t = threading.Thread(target=lambda: process_spinner("CHECKING IF ACCOUNT IS ACTIVE...", stop_event))
+        t.start()
+        valid = verify_user(email, password)
+        stop_event.set()
+        t.join()
+
+        if valid:
+            check_animation("VERIFICATION SUCCESSFUL!", 2)
+            main_menu(email)
+            return
+
+    os.system('clear')
+    banner()
+    print(f"  {R}Too many failed attempts. Returning to main screen.{RES}")
+    time.sleep(2)
 
 # ── MAIN MENU ─────────────────────────────
 def main_menu(username=""):

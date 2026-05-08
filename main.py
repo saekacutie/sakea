@@ -1183,8 +1183,9 @@ def get_temp_number():
     number_found = False
 
     # ── sms-online.co ──
+    if svc_key == "smsonline":
         try:
-        r = requests.get("https://sms-online.co/", timeout=15)
+            r = requests.get("https://sms-online.co/", timeout=15)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
             numbers = []

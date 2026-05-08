@@ -1189,6 +1189,20 @@ def get_temp_number():
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
             numbers = []
+            for a in soup.find_all('a', href=True):
+                m = re.search(r'/receive-sms-online/(\+?\d+)', a['href'])
+                if m:
+                    numbers.append(m.group(1))
+            if not numbers:
+                for tag in soup.find_all(text=True):
+                    text = tag.strip()
+                    if re.fullmatch(r'\+?\d{7,15}', text):
+                        numbers.append(text)
+            if numbers:
+                current_sms_number = numbers[0]
+                number_found = True
+    except Exception as e:
+        print(f"  {R}Error: {e}{RES}")
 
             # 1. Links with /receive-sms-online/...
             for a in soup.find_all('a', href=True):

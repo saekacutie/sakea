@@ -349,7 +349,7 @@ def signup():
     banner()
     email = input(f"  {W}Email: {RES}").strip()
     if not email:
-        return  # return to auth screen
+        return                     # goes back to auth screen
 
     password = input(f"  {W}Password: {RES}").strip()
     if len(password) < 6:
@@ -357,18 +357,19 @@ def signup():
         banner()
         print(f"  {R}Password must be at least 6 characters.{RES}")
         time.sleep(2)
-        return  # return to auth screen
+        return                     # goes back to auth screen
 
     if not register_user(email, password):
         os.system('clear')
         banner()
         print(f"  {R}Email already registered.{RES}")
         time.sleep(2)
-        return  # return to auth screen
+        return                     # goes back to auth screen
 
     code = str(random.randint(100000, 999999))
     stop_event = threading.Event()
-    t = threading.Thread(target=lambda: process_spinner("Sending verification code to your Gmail account...", stop_event))
+    t = threading.Thread(target=lambda: process_spinner(
+        "Sending verification code to your Gmail account...", stop_event))
     t.start()
     sent = send_verification_code(email, code)
     stop_event.set()
@@ -379,7 +380,7 @@ def signup():
         banner()
         print(f"  {R}Failed to send email. Check Gmail SMTP settings.{RES}")
         time.sleep(2)
-        return  # return to auth screen
+        return                     # goes back to auth screen
 
     os.system('clear')
     banner()
@@ -388,7 +389,7 @@ def signup():
     print(f"  {G}✓ Verification code sent to {email}{RES}")
     time.sleep(2)
 
-    # Code retry loop — stays here until correct or user gives up
+    # Verification code loop – stays here, but can return
     for attempt in range(5):
         os.system('clear')
         banner()
@@ -396,7 +397,7 @@ def signup():
         print(f"  {W}Password: {'*' * len(password)}{RES}")
         if attempt > 0:
             print(f"  {Y}Incorrect code. {5 - attempt} attempts remaining.{RES}")
-        print(f"\n  {DIM}Type 'back' to return to main screen.{RES}")
+        print(f"  {DIM}Type 'back' to return to main screen.{RES}")
         user_code = input(f"  {W}Enter code: {RES}").strip()
 
         if user_code == code:
@@ -404,11 +405,9 @@ def signup():
             centered_spinner("Verification is in Process. Please do not Close this Terminal.", 10)
             check_animation("VERIFICATION SUCCESSFUL!", 2)
             main_menu(email)
-            return
-
+            return                     # after main_menu returns, we go back to auth (if main_menu ever returns)
         if user_code.lower() == 'back':
-            return  # return to auth screen
-
+            return                     # goes back to auth screen
         if user_code.lower() == 'resend':
             code = str(random.randint(100000, 999999))
             stop_event = threading.Event()
@@ -425,20 +424,19 @@ def signup():
                 time.sleep(1)
             continue
 
-    # After 5 failed attempts — return to auth screen
+    # After 5 failed code attempts – return to auth screen
     os.system('clear')
     banner()
     print(f"  {R}Too many incorrect attempts. Returning to main screen.{RES}")
     time.sleep(2)
-    # returns to auth screen
-
+    return
 
 def login():
     os.system('clear')
     banner()
     email = input(f"  {W}Email: {RES}").strip()
     if not email:
-        return  # return to auth screen
+        return                     # goes back to auth screen
 
     for attempt in range(3):
         if attempt > 0:
@@ -452,7 +450,8 @@ def login():
             continue
 
         stop_event = threading.Event()
-        t = threading.Thread(target=lambda: process_spinner("CHECKING IF ACCOUNT IS ACTIVE...", stop_event))
+        t = threading.Thread(target=lambda: process_spinner(
+            "CHECKING IF ACCOUNT IS ACTIVE...", stop_event))
         t.start()
         valid = verify_user(email, password)
         stop_event.set()
@@ -461,15 +460,15 @@ def login():
         if valid:
             check_animation("VERIFICATION SUCCESSFUL!", 2)
             main_menu(email)
-            return  # success — stays in main menu
+            return                     # after main_menu returns, back to auth
 
-    # After 3 failed attempts — return to auth screen
+    # After 3 failed password attempts – return to auth screen
     os.system('clear')
     banner()
     print(f"  {R}Too many failed attempts. Returning to main screen.{RES}")
     time.sleep(2)
-    # returns to auth screen
-
+    return
+    
 # ── MAIN MENU ─────────────────────────────
 def main_menu(username=""):
     options = [

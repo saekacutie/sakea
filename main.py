@@ -164,6 +164,28 @@ def centered_spinner(text, duration):
         print(f"{W}{BOLD}{text.center(tw())}{RES}")
         time.sleep(0.1); i += 1
 
+def center_text(text, width=None, ansi_aware=False):
+    """
+    Return the text centered within *width* columns.
+    If *ansi_aware* is True, strip ANSI escape codes before measuring length,
+    then re‑insert them for the final output.
+    """
+    if width is None:
+        width = shutil.get_terminal_size().columns
+
+    if ansi_aware:
+        # strip ANSI codes for length calculation
+        plain = re.sub(r'\x1b\[[0-9;]*m', '', text)
+        pad = (width - len(plain)) // 2
+        if pad < 0:
+            pad = 0
+        return " " * pad + text
+    else:
+        pad = (width - len(text)) // 2
+        if pad < 0:
+            pad = 0
+        return " " * pad + text
+
 def process_spinner(text, stop_event):
     frames = ['◜', '◠', '◝', '◞', '◡', '◟']; i = 0
     while not stop_event.is_set():

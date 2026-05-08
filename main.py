@@ -349,22 +349,22 @@ def signup():
     banner()
     email = input(f"  {W}Email: {RES}").strip()
     if not email:
-        return
+        return  # return to auth screen
 
     password = input(f"  {W}Password: {RES}").strip()
     if len(password) < 6:
         os.system('clear')
         banner()
         print(f"  {R}Password must be at least 6 characters.{RES}")
-        time.sleep(1.5)
-        return
+        time.sleep(2)
+        return  # return to auth screen
 
     if not register_user(email, password):
         os.system('clear')
         banner()
         print(f"  {R}Email already registered.{RES}")
-        time.sleep(1.5)
-        return
+        time.sleep(2)
+        return  # return to auth screen
 
     code = str(random.randint(100000, 999999))
     stop_event = threading.Event()
@@ -377,9 +377,9 @@ def signup():
     if not sent:
         os.system('clear')
         banner()
-        print(f"  {R}Failed to send email. Check your Gmail SMTP settings.{RES}")
+        print(f"  {R}Failed to send email. Check Gmail SMTP settings.{RES}")
         time.sleep(2)
-        return
+        return  # return to auth screen
 
     os.system('clear')
     banner()
@@ -388,15 +388,15 @@ def signup():
     print(f"  {G}✓ Verification code sent to {email}{RES}")
     time.sleep(2)
 
-    # Retry loop for correct code
-    max_attempts = 5
-    for attempt in range(max_attempts):
+    # Code retry loop — stays here until correct or user gives up
+    for attempt in range(5):
         os.system('clear')
         banner()
         print(f"  {W}Email: {email}{RES}")
         print(f"  {W}Password: {'*' * len(password)}{RES}")
         if attempt > 0:
-            print(f"  {Y}Incorrect code. {max_attempts - attempt} attempts remaining.{RES}")
+            print(f"  {Y}Incorrect code. {5 - attempt} attempts remaining.{RES}")
+        print(f"\n  {DIM}Type 'back' to return to main screen.{RES}")
         user_code = input(f"  {W}Enter code: {RES}").strip()
 
         if user_code == code:
@@ -405,6 +405,9 @@ def signup():
             check_animation("VERIFICATION SUCCESSFUL!", 2)
             main_menu(email)
             return
+
+        if user_code.lower() == 'back':
+            return  # return to auth screen
 
         if user_code.lower() == 'resend':
             code = str(random.randint(100000, 999999))
@@ -415,17 +418,19 @@ def signup():
             stop_event.set()
             t.join()
             if sent:
-                print(f"  {G}✓ New code sent to {email}{RES}")
+                print(f"  {G}✓ New code sent.{RES}")
                 time.sleep(1)
             else:
-                print(f"  {R}Failed to resend code.{RES}")
+                print(f"  {R}Failed to resend.{RES}")
                 time.sleep(1)
             continue
 
+    # After 5 failed attempts — return to auth screen
     os.system('clear')
     banner()
-    print(f"  {R}Too many incorrect attempts. Please try again later.{RES}")
+    print(f"  {R}Too many incorrect attempts. Returning to main screen.{RES}")
     time.sleep(2)
+    # returns to auth screen
 
 
 def login():
@@ -433,16 +438,15 @@ def login():
     banner()
     email = input(f"  {W}Email: {RES}").strip()
     if not email:
-        return
+        return  # return to auth screen
 
-    max_attempts = 3
-    for attempt in range(max_attempts):
+    for attempt in range(3):
         if attempt > 0:
             os.system('clear')
             banner()
             print(f"  {W}Email: {email}{RES}")
-            print(f"  {Y}Incorrect password. {max_attempts - attempt} attempts remaining.{RES}")
-        
+            print(f"  {Y}Incorrect password. {3 - attempt} attempts remaining.{RES}")
+
         password = input(f"  {W}Password: {RES}").strip()
         if not password:
             continue
@@ -457,12 +461,14 @@ def login():
         if valid:
             check_animation("VERIFICATION SUCCESSFUL!", 2)
             main_menu(email)
-            return
+            return  # success — stays in main menu
 
+    # After 3 failed attempts — return to auth screen
     os.system('clear')
     banner()
     print(f"  {R}Too many failed attempts. Returning to main screen.{RES}")
     time.sleep(2)
+    # returns to auth screen
 
 # ── MAIN MENU ─────────────────────────────
 def main_menu(username=""):

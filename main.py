@@ -1479,8 +1479,7 @@ def check_sms_service_status():
         print(f"  {DIM}    {svc['description']}{RES}\n")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
     
-# ── TEMP MAIL GENERATOR (FIXED + MULTI-SOURCE) ──
-
+# ── TEMP MAIL GENERATOR (FIXED: CAN VIEW MESSAGES) ──
 import string
 
 TEMPMAIL_SERVICES = {
@@ -1502,21 +1501,9 @@ TEMPMAIL_SERVICES = {
         "status": "checking",
         "description": "Modern GraphQL API",
     },
-    "tempail": {
-        "name": "Tempail",
-        "api": "https://tempail.com/api",
-        "status": "checking",
-        "description": "Web-based temp mail",
-    },
-    "10minutemail": {
-        "name": "10MinuteMail",
-        "api": "https://10minutemail.com",
-        "status": "checking",
-        "description": "Classic 10-min email",
-    },
     "maildrop": {
         "name": "Maildrop",
-        "api": "https://maildrop.cc/api",
+        "api": "https://maildrop.cc",
         "status": "checking",
         "description": "Alias-based inbox",
     },
@@ -1524,10 +1511,9 @@ TEMPMAIL_SERVICES = {
 
 current_temp_email = None
 current_temp_service = None
-temp_mail_session = {"email": "", "password": "", "token": "", "service": "", "login": "", "domain": ""}
+temp_mail_session = {"email": "", "password": "", "token": "", "service": "", "login": "", "domain": "", "sid_token": ""}
 
 def check_service_status(service_key):
-    """Check if a temp mail service is available"""
     service = TEMPMAIL_SERVICES[service_key]
     try:
         if service_key == "guerrillamail":
@@ -1542,25 +1528,19 @@ def check_service_status(service_key):
             r = requests.get(f"{service['api']}/domains", timeout=5)
             if r.status_code == 200:
                 return "available"
-        elif service_key == "10minutemail":
-            r = requests.get("https://10minutemail.com/session/address", timeout=5)
-            if r.status_code == 200:
-                return "available"
         elif service_key == "maildrop":
-            r = requests.get(f"{service['api']}/inbox/test123", timeout=5)
-            if r.status_code in (200, 404):
+            r = requests.post(f"https://api.maildrop.cc/graphql", json={"query": "{ ping(message: \"test\") }"}, timeout=5)
+            if r.status_code == 200:
                 return "available"
     except:
         pass
     return "down"
 
 def update_all_statuses():
-    """Check and update status for all services"""
     for key in TEMPMAIL_SERVICES:
         TEMPMAIL_SERVICES[key]['status'] = check_service_status(key)
 
 def tempmail_main():
-    """Main entry point for Temp Mail Generator"""
     global current_temp_email, current_temp_service
     update_all_statuses()
     options = [
@@ -1586,10 +1566,8 @@ def tempmail_main():
             else:
                 print(f"  {DIM}  {option}{RES}")
         key = get_key()
-        if key == 'UP' and selected > 0:
-            selected -= 1
-        elif key == 'DOWN' and selected < len(options) - 1:
-            selected += 1
+        if key == 'UP' and selected > 0: selected -= 1
+        elif key == 'DOWN' and selected < len(options) - 1: selected += 1
         elif key == 'ENTER':
             if selected == 0: generate_temp_email()
             elif selected == 1: view_live_inbox()
@@ -1600,22 +1578,18 @@ def tempmail_main():
             elif selected == 6: return
 
 def generate_temp_email():
-    """Generate a new temp email from selected service"""
     global current_temp_email, current_temp_service, temp_mail_session
     update_all_statuses()
-    os.system('clear')
-    banner()
+    os.system('clear'); banner()
     print(f"  {Y}GENERATE TEMP EMAIL{RES}\n")
-
     services = list(TEMPMAIL_SERVICES.keys())
     print(f"  {W}Select service:{RES}")
     for i, svc in enumerate(services):
         status = TEMPMAIL_SERVICES[svc]['status']
-        status_color = G if status == "available" else (Y if status == "checking" else R)
+        color = G if status == "available" else (Y if status == "checking" else R)
         status_text = "AVAILABLE" if status == "available" else ("CHECKING" if status == "checking" else "DOWN")
-        print(f"  {G}[{i+1}]{RES} {TEMPMAIL_SERVICES[svc]['name']} [{status_color}{status_text}{RES}]")
+        print(f"  {G}[{i+1}]{RES} {TEMPMAIL_SERVICES[svc]['name']} [{color}{status_text}{RES}]")
     print(f"  {G}[0]{RES} Back")
-
     try:
         choice = int(input(f"\n  {W}Choice: {RES}").strip())
         if choice == 0: return
@@ -1623,13 +1597,12 @@ def generate_temp_email():
         service = TEMPMAIL_SERVICES[service_key]
         if service['status'] == "down":
             print(f"  {R}This service is currently unavailable.{RES}")
-            time.sleep(1.5)
-            return
-    except:
-        return
+            time.sleep(1.5); return
+    except: return
 
     spinner("Generating email", 1.5)
 
+    # ── 1secmail (most reliable, simplest API) ──
     if service_key == "1secmail":
         try:
             r = requests.get(f"{service['api']}?action=genRandomMailbox&count=1", timeout=10)
@@ -1637,98 +1610,99 @@ def generate_temp_email():
                 current_temp_email = r.json()[0]
                 login, domain = current_temp_email.split('@')
                 current_temp_service = service_key
-                temp_mail_session = {"email": current_temp_email, "service": service_key, "login": login, "domain": domain}
-                print(f"\n  {G}[OK] Email generated!{RES}")
-                print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
+                temp_mail_session = {
+                    "email": current_temp_email, "service": service_key,
+                    "login": login, "domain": domain
+                }
+                print(f"\n  {G}[OK] Email: {C}{BOLD}{current_temp_email}{RES}")
             else:
                 print(f"  {R}Failed to generate.{RES}")
-        except:
-            print(f"  {R}Connection error.{RES}")
+        except Exception as e:
+            print(f"  {R}Connection error: {e}{RES}")
 
+    # ── Guerrillamail ──
     elif service_key == "guerrillamail":
         try:
             r = requests.get(f"{service['api']}?f=get_email_address&ip=127.0.0.1&agent=Mozilla", timeout=10)
             if r.status_code == 200:
                 data = r.json()
                 current_temp_email = data.get('email_addr', '')
+                current_temp_service = service_key
                 temp_mail_session = {
                     "email": current_temp_email,
                     "sid_token": data.get('sid_token', ''),
                     "service": service_key
                 }
-                current_temp_service = service_key
-                print(f"\n  {G}[OK] Email generated!{RES}")
-                print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
+                print(f"\n  {G}[OK] Email: {C}{BOLD}{current_temp_email}{RES}")
+                print(f"  {DIM}Session ID: {data.get('sid_token','')[:20]}...{RES}")
             else:
                 print(f"  {R}Failed to generate.{RES}")
-        except:
-            print(f"  {R}Connection error.{RES}")
+        except Exception as e:
+            print(f"  {R}Connection error: {e}{RES}")
 
+    # ── Mail.tm ──
     elif service_key == "mailtm":
         try:
+            # Get domains
             domain_r = requests.get(f"{service['api']}/domains", timeout=10)
-            if domain_r.status_code == 200:
-                domains = domain_r.json()['hydra:member']
-                domain = domains[0]['domain']
-                local_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
-                email = f"{local_part}@{domain}"
-                password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-                account_r = requests.post(f"{service['api']}/accounts", json={"address": email, "password": password}, timeout=10)
-                if account_r.status_code in (200, 201):
-                    current_temp_email = email
-                    current_temp_service = service_key
-                    temp_mail_session = {"email": email, "password": password, "service": service_key}
-                    print(f"\n  {G}[OK] Email generated!{RES}")
-                    print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
-        except:
-            print(f"  {R}Connection error.{RES}")
+            if domain_r.status_code != 200:
+                print(f"  {R}Failed to get domains.{RES}")
+                return
+            domains = domain_r.json()['hydra:member']
+            domain = domains[0]['domain']
+            local_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+            email = f"{local_part}@{domain}"
+            password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
 
-    elif service_key == "tempail":
-        try:
-            r = requests.get(f"{service['api']}/mailbox", timeout=10)
-            if r.status_code == 200:
-                data = r.json()
-                current_temp_email = data.get('mailbox', '')
-                current_temp_service = service_key
-                temp_mail_session = {"email": current_temp_email, "service": service_key}
-                print(f"\n  {G}[OK] Email generated!{RES}")
-                print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
-        except:
-            print(f"  {R}Connection error.{RES}")
+            # Create account
+            account_r = requests.post(f"{service['api']}/accounts", json={
+                "address": email, "password": password
+            }, timeout=10)
+            if account_r.status_code not in (200, 201):
+                print(f"  {R}Failed to create account (HTTP {account_r.status_code}).{RES}")
+                return
 
-    elif service_key == "10minutemail":
-        try:
-            r = requests.get("https://10minutemail.com/session/address", timeout=10)
-            if r.status_code == 200:
-                data = r.json()
-                current_temp_email = data.get('address', '')
-                current_temp_service = service_key
-                temp_mail_session = {"email": current_temp_email, "service": service_key}
-                print(f"\n  {G}[OK] Email generated!{RES}")
-                print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
-        except:
-            print(f"  {R}Connection error.{RES}")
+            # Get token immediately
+            token_r = requests.post(f"{service['api']}/token", json={
+                "address": email, "password": password
+            }, timeout=10)
+            token = ""
+            if token_r.status_code == 200:
+                token = token_r.json().get('token', '')
 
+            current_temp_email = email
+            current_temp_service = service_key
+            temp_mail_session = {
+                "email": email, "password": password,
+                "token": token, "service": service_key,
+                "login": local_part, "domain": domain
+            }
+            print(f"\n  {G}[OK] Email: {C}{BOLD}{current_temp_email}{RES}")
+        except Exception as e:
+            print(f"  {R}Connection error: {e}{RES}")
+
+    # ── Maildrop (GraphQL API) ──
     elif service_key == "maildrop":
-        local_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        local_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
         current_temp_email = f"{local_part}@maildrop.cc"
         current_temp_service = service_key
-        temp_mail_session = {"email": current_temp_email, "service": service_key, "login": local_part}
-        print(f"\n  {G}[OK] Email generated!{RES}")
-        print(f"  {W}Email: {C}{BOLD}{current_temp_email}{RES}")
+        temp_mail_session = {
+            "email": current_temp_email, "service": service_key,
+            "login": local_part
+        }
+        print(f"\n  {G}[OK] Email: {C}{BOLD}{current_temp_email}{RES}")
+        print(f"  {DIM}Browse: https://maildrop.cc/inbox/{local_part}{RES}")
 
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
+
 def view_live_inbox():
-    """View live inbox for current temp email"""
     global current_temp_email, temp_mail_session
     if not current_temp_email:
         print(f"  {R}No active temp email. Generate one first.{RES}")
-        time.sleep(1.5)
-        return
+        time.sleep(1.5); return
 
-    os.system('clear')
-    banner()
+    os.system('clear'); banner()
     print(f"  {Y}LIVE INBOX{RES}")
     print(f"  {C}{current_temp_email}{RES}\n")
 
@@ -1736,145 +1710,222 @@ def view_live_inbox():
     spinner("Fetching inbox", 1.5)
     messages = []
 
+    # ── 1secmail: simple GET ──
     if service == "1secmail":
         login = temp_mail_session.get('login', '')
         domain = temp_mail_session.get('domain', '')
         if not login:
-            login, domain = current_temp_email.split('@')
+            parts = current_temp_email.split('@')
+            login, domain = parts[0], parts[1]
         try:
-            r = requests.get(f"https://www.1secmail.com/api/v1/?action=getMessages&login={login}&domain={domain}", timeout=10)
+            r = requests.get(
+                f"https://www.1secmail.com/api/v1/?action=getMessages&login={login}&domain={domain}",
+                timeout=10
+            )
             if r.status_code == 200:
                 messages = r.json()
-        except:
-            print(f"  {R}Connection error.{RES}")
+                print(f"  {G}Raw API response: {len(messages)} messages{RES}")
+        except Exception as e:
+            print(f"  {R}Connection error: {e}{RES}")
 
+    # ── Guerrillamail: use get_email_list (NOT fetch_email) ──
     elif service == "guerrillamail":
         sid = temp_mail_session.get('sid_token', '')
+        if not sid:
+            print(f"  {R}No session token. Re-generate the email.{RES}")
+            input(f"\n  {DIM}Press ENTER to continue...{RES}"); return
         try:
-            r = requests.get(f"https://api.guerrillamail.com/ajax.php?f=fetch_email&sid_token={sid}&seq=0", timeout=10)
+            # CORRECT: f=get_email_list to list all messages
+            r = requests.get(
+                f"https://api.guerrillamail.com/ajax.php?f=get_email_list&sid_token={sid}&offset=0",
+                timeout=10
+            )
+            print(f"  {DIM}API status: HTTP {r.status_code}{RES}")
             if r.status_code == 200:
                 data = r.json()
                 if 'list' in data:
                     messages = data['list']
-        except:
-            print(f"  {R}Connection error.{RES}")
+                    print(f"  {G}Found {len(messages)} messages{RES}")
+                else:
+                    print(f"  {Y}API returned: {json.dumps(data)[:100]}{RES}")
+            else:
+                print(f"  {R}API returned HTTP {r.status_code}{RES}")
+        except Exception as e:
+            print(f"  {R}Connection error: {e}{RES}")
 
+    # ── Mail.tm: use bearer token ──
     elif service == "mailtm":
         email = temp_mail_session.get('email', '')
         password = temp_mail_session.get('password', '')
-        try:
-            token_r = requests.post("https://api.mail.tm/token", json={"address": email, "password": password}, timeout=10)
-            if token_r.status_code == 200:
-                token = token_r.json()['token']
-                headers = {"Authorization": f"Bearer {token}"}
-                msg_r = requests.get("https://api.mail.tm/messages", headers=headers, timeout=10)
-                if msg_r.status_code == 200:
-                    for msg in msg_r.json()['hydra:member']:
-                        messages.append({
-                            "id": msg.get('id', ''),
-                            "mail_from": msg.get('from', {}).get('address', 'Unknown'),
-                            "mail_subject": msg.get('subject', 'No Subject'),
-                            "mail_date": msg.get('createdAt', ''),
-                        })
-        except:
-            print(f"  {R}Connection error.{RES}")
+        token = temp_mail_session.get('token', '')
 
+        # Get fresh token if needed
+        if not token:
+            try:
+                token_r = requests.post("https://api.mail.tm/token", json={
+                    "address": email, "password": password
+                }, timeout=10)
+                if token_r.status_code == 200:
+                    token = token_r.json().get('token', '')
+                    temp_mail_session['token'] = token
+            except:
+                pass
+
+        if not token:
+            print(f"  {R}Could not authenticate with Mail.tm.{RES}")
+            input(f"\n  {DIM}Press ENTER to continue...{RES}"); return
+
+        try:
+            headers = {"Authorization": f"Bearer {token}"}
+            r = requests.get("https://api.mail.tm/messages", headers=headers, timeout=10)
+            print(f"  {DIM}API status: HTTP {r.status_code}{RES}")
+            if r.status_code == 200:
+                data = r.json()
+                member_list = data.get('hydra:member', [])
+                print(f"  {G}Found {len(member_list)} messages{RES}")
+                for msg in member_list:
+                    messages.append({
+                        "id": msg.get('id', ''),
+                        "from": msg.get('from', {}).get('address', 'Unknown'),
+                        "subject": msg.get('subject', 'No Subject'),
+                        "date": msg.get('createdAt', ''),
+                    })
+        except Exception as e:
+            print(f"  {R}Connection error: {e}{RES}")
+
+    # ── Maildrop: GraphQL ──
     elif service == "maildrop":
         login = temp_mail_session.get('login', '')
         try:
-            r = requests.get(f"https://maildrop.cc/api/inbox/{login}", timeout=10)
+            r = requests.post("https://api.maildrop.cc/graphql", json={
+                "query": f'{{ inbox(mailbox: "{login}") {{ id headerFrom subject date }} }}'
+            }, timeout=10)
             if r.status_code == 200:
                 data = r.json()
-                for msg in data.get('messages', []):
+                inbox = data.get('data', {}).get('inbox', [])
+                print(f"  {G}Found {len(inbox)} messages{RES}")
+                for msg in inbox:
                     messages.append({
                         "id": msg.get('id', ''),
-                        "mail_from": msg.get('from', 'Unknown'),
-                        "mail_subject": msg.get('subject', 'No Subject'),
-                        "mail_date": msg.get('date', ''),
+                        "from": msg.get('headerFrom', 'Unknown'),
+                        "subject": msg.get('subject', 'No Subject'),
+                        "date": msg.get('date', ''),
                     })
-        except:
-            print(f"  {R}Connection error.{RES}")
+            else:
+                print(f"  {R}GraphQL error (HTTP {r.status_code}){RES}")
+        except Exception as e:
+            print(f"  {R}Connection error: {e}{RES}")
 
+    # ── Display messages ──
     if messages:
-        print(f"  {G}{len(messages)} emails found:{RES}\n")
+        print(f"\n  {G}{len(messages)} emails found:{RES}\n")
         for i, msg in enumerate(messages):
-            msg_id = msg.get('id', msg.get('mail_id', str(i)))
             sender = msg.get('from', msg.get('mail_from', 'Unknown'))
             subject = msg.get('subject', msg.get('mail_subject', 'No Subject'))
             date = msg.get('date', msg.get('mail_date', 'N/A'))
+            msg_id = msg.get('id', msg.get('mail_id', str(i+1)))
             print(f"  {G}[{msg_id}]{RES} From: {sender}")
             print(f"  {DIM}    Subject: {subject[:60]}{RES}")
             print(f"  {DIM}    Date: {date}{RES}\n")
     else:
-        print(f"  {DIM}Inbox is empty.{RES}")
+        print(f"\n  {DIM}Inbox is empty. Send a test email to:{RES}")
+        print(f"  {C}{current_temp_email}{RES}")
 
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
+
 
 def refresh_inbox():
     view_live_inbox()
 
+
 def view_specific_email():
-    """View a specific email by ID"""
     global current_temp_email, temp_mail_session
     if not current_temp_email:
         print(f"  {R}No active temp email.{RES}")
-        time.sleep(1.5)
-        return
+        time.sleep(1.5); return
 
     service = temp_mail_session.get('service', current_temp_service)
     msg_id = input(f"  {W}Email ID to view: {RES}").strip()
-    if not msg_id:
-        return
+    if not msg_id: return
 
-    os.system('clear')
-    banner()
+    os.system('clear'); banner()
     spinner("Fetching email", 1)
 
-    body = ""
-    subject = "No Subject"
-    sender = "Unknown"
+    body = ""; subject = "No Subject"; sender = "Unknown"
 
     if service == "1secmail":
         login = temp_mail_session.get('login', '')
         domain = temp_mail_session.get('domain', '')
+        if not login:
+            parts = current_temp_email.split('@')
+            login, domain = parts[0], parts[1]
         try:
-            r = requests.get(f"https://www.1secmail.com/api/v1/?action=readMessage&login={login}&domain={domain}&id={msg_id}", timeout=10)
+            r = requests.get(
+                f"https://www.1secmail.com/api/v1/?action=readMessage&login={login}&domain={domain}&id={msg_id}",
+                timeout=10
+            )
             if r.status_code == 200:
                 data = r.json()
                 body = data.get('textBody', data.get('htmlBody', 'No content'))
                 subject = data.get('subject', 'No Subject')
                 sender = data.get('from', 'Unknown')
-        except:
-            print(f"  {R}Connection error.{RES}")
+        except Exception as e:
+            print(f"  {R}Error: {e}{RES}")
 
     elif service == "guerrillamail":
         sid = temp_mail_session.get('sid_token', '')
         try:
-            r = requests.get(f"https://api.guerrillamail.com/ajax.php?f=fetch_email&sid_token={sid}&email_id={msg_id}", timeout=10)
+            r = requests.get(
+                f"https://api.guerrillamail.com/ajax.php?f=fetch_email&sid_token={sid}&email_id={msg_id}",
+                timeout=10
+            )
             if r.status_code == 200:
                 data = r.json()
-                body = data.get('mail_body', 'No content')
+                body = data.get('mail_body', data.get('mail_excerpt', 'No content'))
                 subject = data.get('mail_subject', 'No Subject')
                 sender = data.get('mail_from', 'Unknown')
-        except:
-            print(f"  {R}Connection error.{RES}")
+        except Exception as e:
+            print(f"  {R}Error: {e}{RES}")
 
     elif service == "mailtm":
         email = temp_mail_session.get('email', '')
         password = temp_mail_session.get('password', '')
+        token = temp_mail_session.get('token', '')
+        if not token:
+            try:
+                token_r = requests.post("https://api.mail.tm/token", json={
+                    "address": email, "password": password
+                }, timeout=10)
+                if token_r.status_code == 200:
+                    token = token_r.json().get('token', '')
+                    temp_mail_session['token'] = token
+            except: pass
         try:
-            token_r = requests.post("https://api.mail.tm/token", json={"address": email, "password": password}, timeout=10)
-            if token_r.status_code == 200:
-                token = token_r.json()['token']
-                headers = {"Authorization": f"Bearer {token}"}
-                msg_r = requests.get(f"https://api.mail.tm/messages/{msg_id}", headers=headers, timeout=10)
-                if msg_r.status_code == 200:
-                    data = msg_r.json()
-                    body = data.get('text', data.get('html', [''])[0] if isinstance(data.get('html'), list) else data.get('html', 'No content'))
-                    subject = data.get('subject', 'No Subject')
-                    sender = data.get('from', {}).get('address', 'Unknown')
-        except:
-            print(f"  {R}Connection error.{RES}")
+            headers = {"Authorization": f"Bearer {token}"}
+            r = requests.get(f"https://api.mail.tm/messages/{msg_id}", headers=headers, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                body = data.get('text', data.get('html', [''])[0] if isinstance(data.get('html'), list) else '')
+                subject = data.get('subject', 'No Subject')
+                sender = data.get('from', {}).get('address', 'Unknown')
+        except Exception as e:
+            print(f"  {R}Error: {e}{RES}")
+
+    elif service == "maildrop":
+        login = temp_mail_session.get('login', '')
+        try:
+            r = requests.post("https://api.maildrop.cc/graphql", json={
+                "query": f'{{ message(mailbox: "{login}", id: "{msg_id}") {{ id headerFrom subject text html date }} }}'
+            }, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                msg = data.get('data', {}).get('message', {})
+                if msg:
+                    body = msg.get('text', msg.get('html', 'No content'))
+                    subject = msg.get('subject', 'No Subject')
+                    sender = msg.get('headerFrom', 'Unknown')
+        except Exception as e:
+            print(f"  {R}Error: {e}{RES}")
 
     print(f"\n  {G}Subject: {subject}{RES}")
     print(f"  {G}From: {sender}{RES}")
@@ -1883,21 +1934,22 @@ def view_specific_email():
     print(f"  {G}{'─'*50}{RES}")
     input(f"\n  {DIM}Press ENTER to continue...{RES}")
 
+
 def copy_tempmail():
     global current_temp_email
     if not current_temp_email:
         print(f"  {R}No active temp email.{RES}")
-        time.sleep(1.5)
-        return
+        time.sleep(1.5); return
     os.system(f'echo "{current_temp_email}" | termux-clipboard-set 2>/dev/null')
-    print(f"  {G}[OK] Email copied to clipboard!{RES}")
-    print(f"  {C}{current_temp_email}{RES}")
+    print(f"  {G}[OK] Email copied: {C}{current_temp_email}{RES}")
     time.sleep(1.5)
 
+
 def change_tempmail_service():
-    global current_temp_email, current_temp_service
+    global current_temp_email, current_temp_service, temp_mail_session
     current_temp_email = None
     current_temp_service = None
+    temp_mail_session = {"email": "", "password": "", "token": "", "service": "", "login": "", "domain": "", "sid_token": ""}
     print(f"  {G}[OK] Service reset. Generate a new email.{RES}")
     time.sleep(1)
     

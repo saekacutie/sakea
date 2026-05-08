@@ -1495,6 +1495,10 @@ def check_sms_service_status():
  # ── TEMP MAIL GENERATOR (REBUILT 100%) ──
 import string
 
+current_temp_email = None
+current_temp_service = None
+temp_mail_session = {"email":"","password":"","token":"","service":"","login":"","domain":"","sid_token":""}
+    
 def tempmail_main():
     global current_temp_email, current_temp_service, temp_mail_session
     options = [

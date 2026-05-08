@@ -200,35 +200,103 @@ def banner(username=""):
 
 # ── LOADING SCREEN ────────────────────────
 def loading_screen():
+    """
+    A clean, centered loading screen with a spinner and rotating multilingual greetings.
+    No terminal artifacts, no residual characters, just smooth transitions.
+    """
+
+    # ── Step 1: determine how long to run ──
     missing = []
-    for mod in ["requests", "bs4", "colorama", "playwright"]:
+    for mod in ["requests", "bs4", "colorama"]:
         try:
             importlib.import_module(mod)
         except ImportError:
             missing.append(mod)
     duration = 60 if missing else 10
-    greetings = [
-        ("English", "Welcome!"), ("Spanish", "¡Bienvenido!"), ("French", "Bienvenue!"),
-        ("German", "Willkommen!"), ("Italian", "Benvenuto!"), ("Japanese", "ようこそ"),
-        ("Korean", "환영합니다"), ("Filipino", "Maligayang Pagdating!"),
-    ]
+
+    # ── Step 2: install missing packages synchronously ──
+    #    (avoids background processes & flashing)
     if missing:
         for pkg in missing:
-            subprocess.run([sys.executable, "-m", "pip", "install", pkg], capture_output=True)
-    frames = ['◜', '◠', '◝', '◞', '◡', '◟']
-    end = time.time() + duration; i = 0; g = 0; greet_timer = time.time()
-    while time.time() < end:
-        os.system('clear')
-        h = shutil.get_terminal_size().lines
-        print("\n" * (h // 2 - 3))
-        print(f"{C}{BOLD}{frames[i%6].center(tw())}{RES}")
-        print()
-        if time.time() - greet_timer >= 5:
-            g = (g + 1) % len(greetings)
-            greet_timer = time.time()
-        print(f"{W}{BOLD}{greetings[g][1].center(tw())}{RES}")
-        time.sleep(0.1); i += 1
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", pkg],
+                capture_output=True,
+                timeout=30
+            )
 
+    # ── Step 3: greetings data ──
+    greetings = [
+        ("English",  "Welcome!"),
+        ("Spanish",  "¡Bienvenido!"),
+        ("French",   "Bienvenue!"),
+        ("German",   "Willkommen!"),
+        ("Italian",  "Benvenuto!"),
+        ("Japanese", "ようこそ"),
+        ("Korean",   "환영합니다"),
+        ("Filipino", "Maligayang Pagdating!"),
+    ]
+
+    frames  = ['◜', '◠', '◝', '◞', '◡', '◟']          # spinner frames
+    frame_delay = 0.08                                 # spinner speed
+    greet_interval = 5.0                               # seconds between greeting changes
+
+    start_time = time.time()
+    greet_index = 0
+    next_greet_time = start_time + greet_interval
+
+    # ── Step 4: main loop ──
+    while time.time() - start_time < duration:
+
+        # --- get terminal dimensions every iteration ---
+        term_width = shutil.get_terminal_size().columns
+        term_height = shutil.get_terminal_size().lines
+
+        # --- pick current spinner frame ---
+        elapsed = time.time() - start_time
+        frame_idx = int(elapsed / frame_delay) % len(frames)
+        spinner_char = frames[frame_idx]
+
+        # --- pick current greeting (switch every 5 seconds) ---
+        now = time.time()
+        if now >= next_greet_time:
+            greet_index = (greet_index + 1) % len(greetings)
+            next_greet_time = now + greet_interval
+        greeting = greetings[greet_index][1]
+
+        # --- build the three centered lines ---
+        spinner_line = center_text(spinner_char, term_width)
+        blank_line  = " " * term_width
+        greet_line  = center_text(f"{BOLD}{W}{greeting}{RES}", term_width, ansi_aware=True)
+
+        # --- calculate vertical padding to center the block ---
+        #     We have 3 rows (spinner, blank, greeting). Place them so that
+        #     the middle of the block sits at the middle of the screen.
+        total_rows = 3
+        top_padding = (term_height - total_rows) // 2
+        if top_padding < 0:
+            top_padding = 0
+
+        # --- clear screen and print everything at once ---
+        #     Doing a single clear + one multi‑line print avoids flicker.
+        os.system('clear')
+        lines = ["\n"] * top_padding        # empty lines for vertical centering
+        lines.append(spinner_line)
+        lines.append(blank_line)
+        lines.append(greet_line)
+
+        # Fill the rest of the screen with empty lines to avoid residual junk
+        remaining = term_height - len(lines)
+        if remaining > 0:
+            lines.extend(["\n"] * remaining)
+
+        sys.stdout.write("".join(lines))
+        sys.stdout.flush()
+
+        time.sleep(0.05)                     # small sleep to cap CPU usage
+
+    # ── Step 5: final blank screen ──
+    os.system('clear')
+    
 # ── ARROW MENU ────────────────────────────
 def arrow_menu(options, username=""):
     selected = 0

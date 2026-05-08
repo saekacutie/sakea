@@ -1184,27 +1184,42 @@ def get_temp_number():
 
     # ── sms-online.co ──
     if svc_key == "smsonline":
-        try:
-            r = requests.get("https://sms-online.co/", timeout=15)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, 'html.parser')
-                numbers = []
-                # Method 1: links
-                for link in soup.find_all('a', href=True):
-                    m = re.search(r'/receive-sms-online/(\+?\d+)', link.get('href', ''))
-                    if m: numbers.append(m.group(1))
-                # Method 2: visible text
-                if not numbers:
-                    for t in soup.find_all(['div', 'span', 'td']):
-                        txt = t.get_text(strip=True)
-                        if re.match(r'^\+?\d{7,15}$', txt) and txt not in numbers:
-                            numbers.append(txt)
-                if numbers:
-                    current_sms_number = numbers[0]
-                    number_found = True
-        except Exception as e:
-            print(f"  {R}Error: {e}{RES}")
+    try:
+        r = requests.get("https://sms-online.co/", timeout=15)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            numbers = []
 
+            # 1. Links with /receive-sms-online/...
+            for a in soup.find_all('a', href=True):
+                m = re.search(r'/receive-sms-online/(\+?\d+)', a['href'])
+                if m:
+                    numbers.append(m.group(1))
+
+            # 2. Any element whose visible text is exactly a phone number
+            if not numbers:
+                for tag in soup.find_all(text=True):
+                    text = tag.strip()
+                    if re.fullmatch(r'\+?\d{7,15}', text):
+                        numbers.append(text)
+
+            # 3. Extract from table rows (fallback for message pages)
+            if not numbers:
+                for row in soup.find_all('tr'):
+                    cells = row.find_all('td')
+                    for cell in cells:
+                        text = cell.get_text(strip=True)
+                        if re.fullmatch(r'\+?\d{7,15}', text) and text not in numbers:
+                            numbers.append(text)
+
+            if numbers:
+                current_sms_number = numbers[0]
+                number_found = True
+            else:
+                print(f"  {R}No numbers found on page.{RES}")
+    except Exception as e:
+        print(f"  {R}Error: {e}{RES}")
+        
     # ── online-receive-sms.com API ──
     elif svc_key == "onlinereceivesms":
         try:
@@ -1273,23 +1288,40 @@ def get_temp_number():
 
     # ── freephonenum.com ──
     elif svc_key == "freephonenum":
-        try:
-            r = requests.get("https://freephonenum.com/", timeout=15)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, 'html.parser')
-                numbers = []
-                for a in soup.find_all('a', href=True):
-                    m = re.search(r'/phone/(\+?\d+)', a.get('href', ''))
-                    if m: numbers.append(m.group(1))
-                if not numbers:
-                    for t in soup.find_all(['div', 'span', 'td']):
-                        txt = t.get_text(strip=True)
-                        if re.match(r'^\+?\d{7,15}$', txt): numbers.append(txt)
-                if numbers:
-                    current_sms_number = numbers[0]
-                    number_found = True
-        except Exception as e:
-            print(f"  {R}Error: {e}{RES}")
+    try:
+        r = requests.get("https://freephonenum.com/", timeout=15)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            numbers = []
+
+            # 1. Look for links like /phone/...
+            for a in soup.find_all('a', href=True):
+                m = re.search(r'/phone/(\+?\d+)', a['href'])
+                if m:
+                    numbers.append(m.group(1))
+
+            # 2. Look for any text that is a complete phone number
+            if not numbers:
+                for tag in soup.find_all(text=True):
+                    text = tag.strip()
+                    if re.fullmatch(r'\+?\d{7,15}', text):
+                        numbers.append(text)
+
+            # 3. Search inside divs with specific class (if known)
+            if not numbers:
+                for div in soup.find_all('div', class_=re.compile(r'number|phone')):
+                    text = div.get_text(strip=True)
+                    match = re.search(r'(\+?\d{7,15})', text)
+                    if match:
+                        numbers.append(match.group(1))
+
+            if numbers:
+                current_sms_number = numbers[0]
+                number_found = True
+            else:
+                print(f"  {R}No numbers found on page.{RES}")
+    except Exception as e:
+        print(f"  {R}Error: {e}{RES}")
 
     if number_found and current_sms_number:
         current_sms_service = svc_key
